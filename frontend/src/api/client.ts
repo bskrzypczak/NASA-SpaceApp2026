@@ -1,6 +1,6 @@
-import type { ApiErrorBody, ApiSite, Heightmap, LayerInfo, TerrainPoint } from './types';
+import type { ApiErrorBody, ApiSite, Heightmap, HorizonProfile, LayerInfo, SimulationRequest, SimulationResult, TerrainPoint } from './types';
 import { SITES } from '../data/sites';
-import { mockHeightmap, mockTerrainPoint } from './mocks';
+import { mockHeightmap, mockHorizon, mockSimulation, mockTerrainPoint } from './mocks';
 
 const BASE = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '');
 const USE_MOCKS = import.meta.env.VITE_USE_MOCKS === 'true';
@@ -16,6 +16,27 @@ export class ApiError extends Error {
   constructor(public code: string, message: string, public status?: number, public field?: string) {
     super(message);
   }
+}
+
+async function readError(res: Response): Promise<ApiError> {
+  let body: ApiErrorBody | null = null;
+  try {
+    body = (await res.json()) as ApiErrorBody;
+  } catch {
+    /* not JSON */
+  }
+  return new ApiError(body?.error.code ?? `HTTP_${res.status}`, body?.error.message ?? res.statusText, res.status, body?.error.field);
+}
+
+async function post<T>(path: string, payload: unknown, signal?: AbortSignal): Promise<T> {
+  const res = await fetch(new URL(BASE + path, window.location.origin), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+    signal,
+  });
+  if (!res.ok) throw await readError(res);
+  return (await res.json()) as T;
 }
 
 async function get<T>(path: string, params: Record<string, string | number>, signal?: AbortSignal): Promise<T> {
@@ -92,4 +113,42 @@ export async function getLayers(signal?: AbortSignal): Promise<LayerInfo[]> {
     if (e instanceof ApiError && e.status === 404) return DEFAULT_LAYERS; // endpoint not built yet
     throw e;
   }
+}
+
+/* ---------- Horizon & simulations ---------- */
+
+/** Terrain horizon around the point. null = flat model / outside DEM coverage / no backend. */
+export async function getHorizon(lat: number, lon: number, heightM = 2, signal?: AbortSignal): Promise<HorizonProfile | null> {
+  if (apiMode === 'live') {
+    try {
+      return await get<HorizonProfile>('/horizon', { lat, lon, heightM, binDeg: 0.5 }, signal);
+    } catch (e) {
+      if (e instanceof ApiError && e.code === 'OUT_OF_DEM_COVERAGE') return null;
+      throw e;
+    }
+  }
+  if (apiMode === 'mock') return mockHorizon(lat, lon, heightM);
+  return null;
+}
+
+const mockStore = new Map<string, SimulationResult>();
+
+/** POST /simulations. The first run for a new site can take ~40 s on the backend (DEM download). */
+export async function createSimulation(req: SimulationRequest, signal?: AbortSignal): Promise<SimulationResult> {
+  if (apiMode === 'live') return post<SimulationResult>('/simulations', req, signal);
+  if (apiMode === 'mock') {
+    await new Promise((r) => setTimeout(r, 900)); // feel the loading state
+    const res = mockSimulation(req);
+    mockStore.set(res.id, res);
+    return res;
+  }
+  throw new ApiError('BACKEND_OFFLINE', 'No backend configured. Set VITE_API_URL or VITE_USE_MOCKS=true in .env.local.');
+}
+
+/** GET /simulations/{id}. Results live in backend memory — 404 after a backend restart. */
+export async function getSimulation(id: string, signal?: AbortSignal): Promise<SimulationResult> {
+  if (apiMode === 'live') return get<SimulationResult>(`/simulations/${encodeURIComponent(id)}`, {}, signal);
+  const hit = mockStore.get(id);
+  if (hit) return hit;
+  throw new ApiError('NOT_FOUND', 'Simulation not found (mock results are kept only until reload).', 404);
 }

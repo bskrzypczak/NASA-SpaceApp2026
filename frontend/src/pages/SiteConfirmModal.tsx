@@ -29,8 +29,8 @@ export function SiteConfirmModal() {
           <button type="button" className="btn btn--lg" onClick={close}>
             Back
           </button>
-          <button type="button" className="btn btn--primary btn--lg" disabled title="Simulation screen comes next">
-            ▶ Run simulation (next sprint)
+          <button type="button" className="btn btn--primary btn--lg" onClick={() => navigate('/simulation/new')}>
+            ▶ Run simulation
           </button>
         </>
       }

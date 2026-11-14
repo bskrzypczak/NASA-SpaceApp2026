@@ -60,3 +60,122 @@ export interface LayerInfo {
 export interface ApiErrorBody {
   error: { code: string; message: string; field?: string };
 }
+
+/* ---------- Horizon & simulation (backend §4.4, §4.6) ---------- */
+
+export interface HorizonProfile {
+  lat: number;
+  lon: number;
+  heightM: number;
+  binDeg: number;
+  maxDistanceKm: number;
+  /** 0 … 360−binDeg, one value per bin */
+  azimuthDeg: number[];
+  /** terrain elevation angle per azimuth bin, degrees above the flat horizon */
+  elevationDeg: number[];
+  features: { name: string; azFromDeg: number; azToDeg: number; maxElevationDeg: number }[];
+  demVersion: string;
+  demResolutionM?: number;
+  mock?: boolean;
+}
+
+export type HorizonModel = 'real' | 'flat';
+
+export interface Hardware {
+  batteryWh: number;
+  solarW: number;
+  dayLoadW: number;
+  nightLoadW: number;
+  reservePct: number;
+  panelHeightM: number;
+  mastHeightM: number;
+}
+
+export interface ScoreWeights {
+  power: number;
+  comms: number;
+  night: number;
+}
+
+export interface SimulationRequest {
+  site: { siteId: string } | { lat: number; lon: number };
+  /** ISO 8601 with offset, e.g. 2027-03-14T06:00:00Z */
+  landingTime: string;
+  missionDays: number;
+  windowDays: number;
+  stepMin: number;
+  horizonModel: HorizonModel;
+  hardware?: Partial<Hardware>;
+  weights?: Partial<ScoreWeights>;
+  includeTimeseries?: boolean;
+}
+
+export interface DayWindow {
+  fromDay: number;
+  toDay: number;
+}
+
+export type SimEventType = 'SUNRISE' | 'SUNSET' | 'EARTHRISE' | 'EARTHSET' | 'BATTERY_LOW' | 'MISSION_END';
+
+export interface SimEvent {
+  type: SimEventType;
+  time: string;
+  day: number;
+  azDeg?: number;
+  elDeg?: number;
+}
+
+export interface ScoreFactor {
+  key: 'power' | 'comms' | 'night';
+  metric: string;
+  value: number;
+  score: number;
+  weight: number;
+  points: number;
+  ok: boolean;
+}
+
+export type Verdict = 'LIKELY' | 'POSSIBLE' | 'RISKY';
+
+export interface SimSummary {
+  successPct: number;
+  verdict: Verdict;
+  flatHorizonSuccessPct?: number;
+  sunlitPct: number;
+  earthVisiblePct: number;
+  bothPct: number;
+  minSocPct: number;
+  minSocAtDay: number;
+  longestNightH: number;
+  longestCommsGapH: number;
+  firstSunsetDay: number | null;
+  firstEarthsetDay: number | null;
+}
+
+export interface SimTimeseries {
+  stepMin: number;
+  day: number[];
+  sunAzDeg: number[];
+  sunElDeg: number[];
+  sunMaskElDeg: number[];
+  sunVisibleFrac: number[];
+  earthAzDeg: number[];
+  earthElDeg: number[];
+  earthMaskElDeg: number[];
+  earthVisible: boolean[];
+  socPct: number[];
+}
+
+export interface SimulationResult {
+  id: string;
+  createdAt: string;
+  /** Echo of the request with defaults filled in. */
+  input: Partial<SimulationRequest> & { hardware?: Hardware; weights?: ScoreWeights };
+  site: { name?: string; lat: number; lon: number; elevationM?: number | null };
+  summary: SimSummary;
+  factors: ScoreFactor[];
+  events: SimEvent[];
+  windows: { sun: DayWindow[]; earth: DayWindow[]; both: DayWindow[] };
+  timeseries?: SimTimeseries;
+  mock?: boolean;
+}

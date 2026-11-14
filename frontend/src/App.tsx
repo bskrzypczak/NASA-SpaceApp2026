@@ -4,6 +4,7 @@ import { ExplorePage } from './pages/ExplorePage';
 import { CatalogPage } from './pages/CatalogPage';
 import { SitePage } from './pages/SitePage';
 import { SiteConfirmModal } from './pages/SiteConfirmModal';
+import { SimulationNewPage, SimulationPage } from './pages/SimulationPage';
 
 function Layout() {
   return (
@@ -35,6 +36,8 @@ export default function App() {
         <Route path="site" element={<SitePage />}>
           <Route path="confirm" element={<SiteConfirmModal />} />
         </Route>
+        <Route path="simulation/new" element={<SimulationNewPage />} />
+        <Route path="simulation/:id" element={<SimulationPage />} />
         <Route path="*" element={<NotFound />} />
       </Route>
     </Routes>

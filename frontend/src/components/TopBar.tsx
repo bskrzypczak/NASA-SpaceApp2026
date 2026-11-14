@@ -1,15 +1,18 @@
 import { Link, NavLink } from 'react-router-dom';
 import { useSelection } from '../store/selection';
 import { toQuery } from '../lib/coords';
+import { useSimulations } from '../store/simulations';
 
 export function TopBar() {
   const lat = useSelection((s) => s.lat);
   const lon = useSelection((s) => s.lon);
+  const lastSim = useSimulations((s) => s.lastId);
 
   const links = [
     { to: '/', label: 'Explore', end: true },
     { to: '/catalog', label: 'Catalog', end: false },
     { to: `/site${toQuery({ lat, lon })}`, label: 'Site', end: false },
+    ...(lastSim ? [{ to: `/simulation/${encodeURIComponent(lastSim)}`, label: 'Simulation', end: false }] : []),
   ];
 
   return (
