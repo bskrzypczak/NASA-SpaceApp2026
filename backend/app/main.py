@@ -1,5 +1,6 @@
 import asyncio
 import hashlib
+import io
 import json
 import math
 import os
@@ -9,11 +10,16 @@ from typing import Literal
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 
 from app.simulation import SimulationRequest, build_simulation_result
 from app.sites import FEATURED_IDS, SITE_BY_ID, SITES
-from app.sources import fetch_ephemeris, fetch_horizon, fetch_lunar_elevation
+from app.sources import (
+    fetch_ephemeris,
+    fetch_horizon,
+    fetch_lunar_elevation,
+    fetch_lunar_heightmap,
+)
 
 API_PREFIX = "/api/v1"
 LUNAR_RADIUS_KM = 1737.4
@@ -181,6 +187,59 @@ async def get_terrain_point(
             ),
         },
     }
+
+
+def _heightmap_png16(heightmap: dict) -> bytes:
+    import numpy as np
+    from PIL import Image
+
+    heights = np.asarray(heightmap["heightsM"], dtype=np.float64)
+    minimum = float(np.min(heights))
+    maximum = float(np.max(heights))
+    if maximum > minimum:
+        pixels = np.rint((heights - minimum) * (65535 / (maximum - minimum)))
+    else:
+        pixels = np.zeros(heights.shape, dtype=np.float64)
+    buffer = io.BytesIO()
+    Image.fromarray(np.clip(pixels, 0, 65535).astype(np.uint16)).save(
+        buffer, format="PNG"
+    )
+    return buffer.getvalue()
+
+
+@app.get(f"{API_PREFIX}/terrain/heightmap", response_model=None)
+async def get_terrain_heightmap(
+    lat: float = Query(..., ge=-90, le=90),
+    lon: float = Query(..., ge=-180, le=360),
+    size_km: float = Query(default=20, alias="sizeKm"),
+    res: int = Query(default=256, ge=16, le=512),
+    response_format: Literal["json", "png16"] = Query(
+        default="json", alias="format"
+    ),
+) -> dict | Response:
+    if size_km not in {5, 10, 20, 40}:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "VALIDATION_ERROR",
+                "message": "sizeKm must be 5, 10, 20, or 40.",
+                "field": "sizeKm",
+            },
+        )
+    normalized_lon = normalize_longitude(lon)
+    heightmap = await fetch_lunar_heightmap(lat, normalized_lon, size_km, res)
+    if response_format == "json":
+        return heightmap
+    return Response(
+        content=_heightmap_png16(heightmap),
+        media_type="image/png",
+        headers={
+            "X-Min-Elevation-M": str(heightmap["minElevationM"]),
+            "X-Max-Elevation-M": str(heightmap["maxElevationM"]),
+            "X-Origin-Elevation-M": str(heightmap["originElevationM"]),
+            "X-Dem-Version": heightmap["demVersion"],
+        },
+    )
 
 
 @app.get(f"{API_PREFIX}/horizon")

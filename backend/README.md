@@ -73,7 +73,7 @@ Każdy błąd ma ten sam kształt:
 | **MVP** | GET | `/simulations/{id}` | Simulation (link do udostępnienia), Mission brief |
 | **MVP** | POST | `/calendar` | Compare dates (miesiące + widok roku) |
 | Ważne | GET | `/horizon` | Simulation (Sky 360°, pierścień horyzontu w 3D), Pro |
-| Ważne | GET | `/terrain/heightmap` | Simulation (teren w scenie 3D) |
+| **MVP** | GET | `/terrain/heightmap` | Site, Simulation (teren w scenie 3D) |
 | Ważne | GET | `/ephemeris` | Pro (surowe dane, eksport) |
 | Ważne | POST | `/scenarios/compare` | Scenarios |
 | Ważne | POST | `/nearby` | Better places nearby |
@@ -503,21 +503,27 @@ Po zakończeniu: `"status": "done", "result": { …taki sam jak odpowiedź synch
 ### 4.16 `GET /terrain/heightmap` — bliski teren do sceny 3D
 
 Query: `lat`, `lon`, `sizeKm` (domyślnie `20`), `res` (siatka, domyślnie `256`), `format` (`json` \| `png16`).
+`sizeKm` przyjmuje `5`, `10`, `20` lub `40`; `res` przyjmuje wartości od `16` do
+`512`. Dane pochodzą z DEM LOLA NASA Moon Trek: nominalnie 100 m/px w
+polarnych usługach DEM, a globalnie z produktu 256 ppd. Gęstsza siatka wyjściowa
+jest interpolowana i nie zwiększa rozdzielczości źródła. Wyniki są cache'owane
+w pamięci procesu (maksymalnie 4 heightmapy przez 24 h).
 
 ```json
 {
   "lat": -89.45, "lon": -137.3,
   "sizeKm": 20, "res": 256,
   "originElevationM": 1912,
-  "minElevationM": -2100, "maxElevationM": 2400,
-  "heightsM": [[1880.2, 1881.0, "…"], "…"],
+  "minElevationM": -12.0, "maxElevationM": 18.0,
+  "heightsM": [[-11.8, -11.0, "…"], "…"],
   "northUp": true,
-  "demVersion": "LOLA-PGDA-87S-5m-v1"
+  "demVersion": "LRO_LOLA_DEM_SPole45_100mp_v04",
+  "demResolutionM": 100
 }
 ```
 
-- Siatka w układzie lokalnym lądownika (środek = punkt lądowania, góra siatki = północ lokalna), wysokości względem punktu lądowania.
-- `png16`: jedna 16-bitowa mapa wysokości (mniejszy transfer). Skala w nagłówkach `X-Min-Elevation-M` / `X-Max-Elevation-M`.
+- Siatka w układzie lokalnym lądownika (środek = punkt lądowania, góra siatki = północ lokalna); `heightsM` i min/max są wysokościami względem `originElevationM`.
+- `png16`: jedna 16-bitowa mapa wysokości (mniejszy transfer). Wartości pikseli 0–65535 mapują liniowo z nagłówków `X-Min-Elevation-M` / `X-Max-Elevation-M`.
 - Daleki teren (do 150 km) **nie** idzie tym endpointem — w scenie rysuje go pierścień z `GET /horizon` (§5.6).
 
 ### 4.15 `GET /simulations/{id}/brief.pdf` (opcjonalnie)

@@ -1,5 +1,6 @@
 import asyncio
 import json
+from types import SimpleNamespace
 
 import httpx
 import numpy as np
@@ -8,9 +9,12 @@ from fastapi import HTTPException
 
 from app.sources import (
     DEM_SERVICES,
+    HeightmapOutOfCoverageError,
     PermanentShadowDataError,
     _fetch_dem_sample,
     _fetch_permanent_shadow,
+    _heightmap_export_params,
+    _heightmap_from_dem,
     _horizon_profile_from_dem,
     _north_polar_stereographic_xy,
     _parse_horizons_response,
@@ -80,6 +84,81 @@ def test_north_polar_projection_matches_moon_north_polar_projection():
 
     assert x == pytest.approx(-11310.3272)
     assert y == pytest.approx(12256.8842)
+
+
+def test_heightmap_uses_local_north_up_grid_relative_to_origin():
+    dem = np.fromfunction(lambda row, _col: 1000 - row, (300, 300), dtype=float)
+    heightmap = _heightmap_from_dem(
+        dem,
+        transform=SimpleNamespace(a=0.001, c=-0.15, e=-0.001, f=0.15),
+        nodata=None,
+        lat=0.0,
+        lon=0.0,
+        size_km=1,
+        res=4,
+        projection="geographic",
+        dem_version="test-dem",
+        dem_resolution_m=100,
+    )
+
+    assert heightmap["originElevationM"] == pytest.approx(850.5)
+    assert heightmap["heightsM"][2][2] == 0
+    assert heightmap["heightsM"][0][2] > heightmap["heightsM"][3][2]
+    assert heightmap["northUp"] is True
+    assert heightmap["minElevationM"] == min(map(min, heightmap["heightsM"]))
+    assert heightmap["maxElevationM"] == max(map(max, heightmap["heightsM"]))
+
+
+def test_heightmap_rejects_nodata_inside_requested_area():
+    dem = np.ones((300, 300), dtype=np.float32)
+    dem[149:151, 149:151] = -9999
+    with pytest.raises(HeightmapOutOfCoverageError):
+        _heightmap_from_dem(
+            dem,
+            transform=SimpleNamespace(a=0.001, c=-0.15, e=-0.001, f=0.15),
+            nodata=-9999,
+            lat=0.0,
+            lon=0.0,
+            size_km=1,
+            res=4,
+            projection="geographic",
+            dem_version="test-dem",
+            dem_resolution_m=100,
+        )
+
+
+def test_heightmap_rejects_unmarked_float32_nodata():
+    dem = np.ones((300, 300), dtype=np.float32)
+    dem[149:151, 149:151] = np.finfo(np.float32).min
+    with pytest.raises(HeightmapOutOfCoverageError):
+        _heightmap_from_dem(
+            dem,
+            transform=SimpleNamespace(a=0.001, c=-0.15, e=-0.001, f=0.15),
+            nodata=None,
+            lat=0.0,
+            lon=0.0,
+            size_km=1,
+            res=4,
+            projection="geographic",
+            dem_version="test-dem",
+            dem_resolution_m=100,
+        )
+
+
+def test_heightmap_export_uses_polar_projection_and_covers_local_square():
+    params = _heightmap_export_params(
+        -89.45, -137.3, 20, 256, DEM_SERVICES["south-pole"]
+    )
+
+    assert "bboxSR" not in params
+    assert "imageSR" not in params
+    assert "interpolation" not in params
+    assert params["format"] == "tiff"
+    assert params["pixelType"] == "F32"
+    left, bottom, right, top = map(float, params["bbox"].split(","))
+    assert right > left
+    assert top > bottom
+    assert max(map(int, params["size"].split(","))) <= 1024
 
 
 def test_horizon_profile_accounts_for_curvature_and_directional_ridge():

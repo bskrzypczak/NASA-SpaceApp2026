@@ -81,6 +81,128 @@ def test_terrain_point_normalizes_longitude_and_returns_nearest_site(monkeypatch
     assert response.json()["inPermanentShadow"] is False
 
 
+def test_heightmap_json_returns_local_grid_and_normalizes_longitude(monkeypatch):
+    observed = {}
+
+    async def fake_heightmap(lat, lon, size_km, res):
+        observed.update(lat=lat, lon=lon, size_km=size_km, res=res)
+        return {
+            "lat": lat,
+            "lon": lon,
+            "sizeKm": size_km,
+            "res": res,
+            "originElevationM": 1956.0,
+            "minElevationM": -2.0,
+            "maxElevationM": 2.0,
+            "heightsM": [[0.0] * res for _ in range(res)],
+            "northUp": True,
+            "demVersion": "LRO_LOLA_DEM_SPole45_100mp_v04",
+            "demResolutionM": 100.0,
+        }
+
+    monkeypatch.setattr("app.main.fetch_lunar_heightmap", fake_heightmap)
+    response = client.get(
+        f"{API}/terrain/heightmap",
+        params={"lat": -89.45, "lon": 222.7, "sizeKm": 10, "res": 16},
+    )
+
+    assert response.status_code == 200
+    assert observed == {
+        "lat": -89.45,
+        "lon": -137.3,
+        "size_km": 10,
+        "res": 16,
+    }
+    assert response.json()["originElevationM"] == 1956.0
+    assert len(response.json()["heightsM"]) == 16
+    assert response.json()["northUp"] is True
+
+
+def test_heightmap_png16_scales_single_band_and_includes_elevation_headers(
+    monkeypatch,
+):
+    async def fake_heightmap(lat, lon, size_km, res):
+        heights = [
+            [row * res + col for col in range(res)]
+            for row in range(res)
+        ]
+        return {
+            "lat": lat,
+            "lon": lon,
+            "sizeKm": size_km,
+            "res": res,
+            "originElevationM": 100.0,
+            "minElevationM": 0.0,
+            "maxElevationM": float(res * res - 1),
+            "heightsM": heights,
+            "northUp": True,
+            "demVersion": "test-dem",
+        }
+
+    monkeypatch.setattr("app.main.fetch_lunar_heightmap", fake_heightmap)
+    response = client.get(
+        f"{API}/terrain/heightmap",
+        params={"lat": -89.45, "lon": -137.3, "res": 16, "format": "png16"},
+    )
+
+    from io import BytesIO
+    from PIL import Image
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/png"
+    assert response.headers["x-min-elevation-m"] == "0.0"
+    assert response.headers["x-max-elevation-m"] == "255.0"
+    with Image.open(BytesIO(response.content)) as image:
+        assert image.mode == "I;16"
+        assert image.size == (16, 16)
+        assert image.getpixel((0, 0)) == 0
+        assert image.getpixel((15, 15)) == 65535
+
+
+def test_heightmap_png16_encodes_constant_relief_without_dividing_by_zero(
+    monkeypatch,
+):
+    async def fake_heightmap(lat, lon, size_km, res):
+        return {
+            "lat": lat,
+            "lon": lon,
+            "sizeKm": size_km,
+            "res": res,
+            "originElevationM": 100.0,
+            "minElevationM": 0.0,
+            "maxElevationM": 0.0,
+            "heightsM": [[0.0] * res for _ in range(res)],
+            "northUp": True,
+            "demVersion": "test-dem",
+        }
+
+    monkeypatch.setattr("app.main.fetch_lunar_heightmap", fake_heightmap)
+    response = client.get(
+        f"{API}/terrain/heightmap",
+        params={"lat": 0, "lon": 0, "res": 16, "format": "png16"},
+    )
+
+    from io import BytesIO
+    from PIL import Image
+
+    assert response.status_code == 200
+    assert response.headers["x-min-elevation-m"] == "0.0"
+    assert response.headers["x-max-elevation-m"] == "0.0"
+    with Image.open(BytesIO(response.content)) as image:
+        assert image.getpixel((0, 0)) == 0
+        assert image.getpixel((15, 15)) == 0
+
+
+def test_heightmap_rejects_unsupported_size():
+    response = client.get(
+        f"{API}/terrain/heightmap",
+        params={"lat": -89.45, "lon": -137.3, "sizeKm": 15},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["field"] == "sizeKm"
+
+
 def test_horizon_endpoint_returns_contract_shape_and_normalizes_longitude(
     monkeypatch,
 ):
