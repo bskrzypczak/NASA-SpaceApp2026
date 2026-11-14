@@ -7,6 +7,8 @@ Dane i zasoby NASA
 
 [System Horyzontów](https://ssd.jpl.nasa.gov/horizons/): Potężne narzędzie do obliczeń efemeryd opracowane przez Laboratorium Napędów Odrzutowych NASA, które oblicza położenie i prędkości ciał niebieskich, w tym Słońca i Ziemi, widzianych z dowolnego miejsca na Księżycu. Za pomocą Horizons możesz uzyskać dokładne położenia kątowe Słońca i Ziemi w określonych momentach i miejscach, które stanowią podstawę Twoich wizualizacji oraz ocen mocy/komunikacji.
 
+[Lunar Polar Illumination (NASA GSFC PGDA)](https://pgda.gsfc.nasa.gov/products/69): mapy LOLA średniego oświetlenia Słońcem i widoczności Ziemi, liczone dla około 18,6-letniego cyklu nutacyjnego.
+
 Zasoby partnerów Agencji Kosmicznej
 CSA (Kanadyjska Agencja Kosmiczna)
 

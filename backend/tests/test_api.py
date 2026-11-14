@@ -44,6 +44,20 @@ def test_layers_catalog_matches_frontend_contract():
     }
 
 
+def test_sources_include_polar_visibility_dataset():
+    response = client.get(f"{API}/meta/sources")
+
+    assert response.status_code == 200
+    assert response.json()["lunarPolarVisibility"] == {
+        "name": "LOLA Lunar Polar Illumination",
+        "source": "NASA GSFC PGDA",
+        "averagingPeriodYears": 18.6,
+        "coverage": "65-90 degrees north and south",
+        "resolutionM": [120, 240],
+        "url": "https://pgda.gsfc.nasa.gov/products/69",
+    }
+
+
 def test_catalog_returns_frontend_sites_and_featured_subset():
     response = client.get(f"{API}/sites")
     assert response.status_code == 200

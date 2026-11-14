@@ -497,9 +497,17 @@ siatki i okna zawierające NoData zwracają `null`. Slope korzysta z cache'u
 heightmapy. `psr` zwraca maskę `1` (w PSR), `0` (poza PSR) lub `null` (poza
 pokryciem / NoData), `unit: null`, źródło NASA GSFC PGDA i wersję rastra
 `LPSR_80S_20MPP_ADJ`; wynik siatki PSR jest cache'owany przez 24 h.
-Warstwy `illumination` i `earth-visibility` na razie odpowiadają błędem
-`422 LAYER_GRID_UNAVAILABLE`. Nieznany identyfikator zwraca
-`404 LAYER_NOT_FOUND`; niepoprawne parametry — `422 VALIDATION_ERROR`.
+`illumination` i `earth-visibility` zwracają ciągłe wartości procentowe
+(`unit: "%"`) z GeoTIFF-ów NASA GSFC PGDA `AVGVISIB`, uśrednionych w cyklu
+nutacyjnym 18,6 roku. Pierwsza warstwa to średni udział widocznej tarczy Słońca,
+druga — średnia widoczność Ziemi (PGDA uznaje ją, gdy widoczna jest dowolna
+część jej tarczy). Dla 75–90° używane są rastry 120 m/px, a przy krawędzi
+pokrycia 65–90° rastry 240 m/px; półkula i produkt są dobierane do lokalizacji
+oraz rozmiaru siatki. Wartości są przeliczane z czynnikiem skali GeoTIFF
+`4e-5` na procenty. Poza pokryciem polarnym lub w NoData zwracane jest `null`;
+całkowity brak pokrycia ma `version: null`. Wyniki są cache'owane przez 24 h.
+Nieznany identyfikator zwraca `404 LAYER_NOT_FOUND`; niepoprawne parametry —
+`422 VALIDATION_ERROR`.
 
 Planowane kafelki w projekcji biegunowej (jak Moon Trek WMTS) można wygenerować z map PGDA / LOLA i serwować statycznie (CDN). Endpoint `/layers/{layer}/tiles/{z}/{x}/{y}.png` nie jest obecnie zaimplementowany.
 
@@ -534,6 +542,7 @@ Czasy etapów to **szacunki planistyczne** (stałe w konfiguracji), nie obliczon
   "ephemeris": { "name": "JPL Horizons API", "version": "1.3", "model": "DE441", "retrievedAt": "2026-11-12" },
   "terrain":   { "name": "LOLA DEM (NASA GSFC PGDA)", "nearFieldM": 5, "farFieldM": 20, "maxDistanceKm": 150 },
   "basemap":   { "name": "Moon Trek WMTS" },
+  "lunarPolarVisibility": { "name": "LOLA Lunar Polar Illumination", "source": "NASA GSFC PGDA", "averagingPeriodYears": 18.6, "coverage": "65-90 degrees north and south" },
   "validationRefs": ["PGDA illumination map", "LROC WAC south pole illumination (88–90°S, 100 m/px)"]
 }
 ```

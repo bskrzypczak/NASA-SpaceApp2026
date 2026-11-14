@@ -22,6 +22,7 @@ from app.nearby_routes import router as nearby_router
 from app.simulation_routes import router as simulation_router
 from app.sites import FEATURED_IDS, SITE_BY_ID, SITES
 from app.sources import fetch_ephemeris, fetch_lunar_elevation
+from app.visibility_grid_source import fetch_visibility_grid
 
 LUNAR_RADIUS_KM = 1737.4
 SiteGroup = Literal["Artemis III", "CLPS", "Commercial", "Other nations", "Apollo"]
@@ -422,7 +423,12 @@ async def get_layer_grid(
                 "field": "id",
             },
         )
-    if layer_id not in {"slope", "psr"}:
+    if layer_id not in {
+        "slope",
+        "psr",
+        "illumination",
+        "earth-visibility",
+    }:
         raise HTTPException(
             status_code=422,
             detail={
@@ -451,6 +457,14 @@ async def get_layer_grid(
         )
 
     normalized_lon = normalize_longitude(lon)
+    if layer_id in {"illumination", "earth-visibility"}:
+        return await fetch_visibility_grid(
+            layer_id,
+            lat,
+            normalized_lon,
+            size_km,
+            res,
+        )
     if layer_id == "slope":
         heightmap = await fetch_lunar_heightmap(
             lat,
@@ -493,5 +507,13 @@ async def get_sources() -> dict:
             "resolutionM": 20,
             "coverage": "80-90 degrees south",
             "url": "https://pgda.gsfc.nasa.gov/data/LOLA_20mpp/LPSR_80S_20MPP_ADJ.TIF",
+        },
+        "lunarPolarVisibility": {
+            "name": "LOLA Lunar Polar Illumination",
+            "source": "NASA GSFC PGDA",
+            "averagingPeriodYears": 18.6,
+            "coverage": "65-90 degrees north and south",
+            "resolutionM": [120, 240],
+            "url": "https://pgda.gsfc.nasa.gov/products/69",
         },
     }

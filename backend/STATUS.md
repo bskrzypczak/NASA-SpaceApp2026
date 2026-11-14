@@ -8,7 +8,8 @@ Aktualizacja: 2026-11-14
   `/api/v1/sites/{id}`, `/api/v1/terrain/point`, `/api/v1/terrain/heightmap`,
   `/api/v1/horizon`, `/api/v1/ephemeris`, `/api/v1/simulations`,
   `/api/v1/simulations/{id}`, `/api/v1/calendar`,
-  `/api/v1/scenarios/compare`, `/api/v1/layers` i `/api/v1/meta/sources`.
+  `/api/v1/scenarios/compare`, `/api/v1/nearby`, `/api/v1/layers`,
+  `/api/v1/layers/{id}/grid` i `/api/v1/meta/sources`.
 - Rozdzielono routery symulacji i kalendarza od konfiguracji aplikacji oraz
   wydzielono obliczenia heightmapy i horyzontu do osobnych modułów źródeł.
   Żaden plik Python w `backend/app` nie przekracza 700 linii.
@@ -62,14 +63,19 @@ Aktualizacja: 2026-11-14
 - Dodano `GET /api/v1/layers/{id}/grid` dla `slope` i `psr`. Siatka nachylenia
   używa metody Horna na tych samych próbkach heightmapy; PSR jest próbkowane z
   rastra PGDA dla środków dokładnie tych samych komórek. Heightmapa używana
-  przez slope i siatka PSR są cache'owane na dysku; pozostałe dwie warstwy
-  zwracają `LAYER_GRID_UNAVAILABLE`.
+  przez slope i siatka PSR są cache'owane na dysku.
+- Rozszerzono `GET /api/v1/layers/{id}/grid` o `illumination` i
+  `earth-visibility` z oficjalnych GeoTIFF-ów PGDA „Lunar Polar Illumination”.
+  Średnie procentowe obejmują 18,6-letni cykl; raster wybierany jest dla
+  właściwej półkuli i pasma szerokości, a wartości są skalowane metadanymi
+  GeoTIFF. Poza pokryciem polarnym i w NoData odpowiedź zawiera `null`.
+  Siatki widoczności są cache'owane na dysku przez 24 h.
 - Rasterio 1.4.4 działa w `C:\Users\joasi\Documents\PP\SEM_2\.venv`.
   Podłączono odczyt wartości `inPermanentShadow` z rastra PSR PGDA (20 m/px,
   80–90°S); piksele NoData i punkty poza zasięgiem pozostają `null`. Live
   sprawdzono wynik `true` dla `(-88, 0)` i `false` dla `(-89.45, -137.3)`.
-- Testy backendu po dodaniu endpointu siatki: `72 passed`, 1 ostrzeżenie
-  deprecacyjne Starlette/httpx.
+- Pełny zestaw testów backendu: `78 passed`, 1 ostrzeżenie deprecacyjne
+  Starlette/httpx.
 - Live dla `(-89.45, -137.3)`: DEM zwrócił wysokość `1956 m`, próbki N/S/E/W
   `1954`, `1955.5`, `1953` i `1952.5 m`, a nachylenie `0.453°`.
   Projekcję północną sprawdzono dodatkowo względem wartości z eksportu GeoTIFF.
@@ -84,6 +90,10 @@ Aktualizacja: 2026-11-14
   `0.749°`–`19.417°`, DEM `LRO_LOLA_DEM_SPole45_100mp_v04`.
 - Live `/layers/psr/grid` dla tego samego punktu i rozmiaru: 256 komórek
   pokrytych rastrem PGDA, wartości 0–1, w tym 4 komórki PSR.
+- Live `/layers/{illumination,earth-visibility}/grid` dla 16×16, zarówno na
+  89.45°S, jak i 89.45°N: wszystkie cztery wywołania zwróciły HTTP 200,
+  256 komórek z danymi i wersje PGDA 75S/75N. Na Connecting Ridge wartości
+  środkowej komórki wyniosły 67.704% oświetlenia i 52.296% widoczności Ziemi.
 - Dodano synchroniczne `POST /api/v1/nearby` jako ograniczoną mapę 3×3:
   symulowane są środek i do czterech punktów kardynalnych, a narożniki poza
   promieniem nie są liczone. Nachylenie z DEM LOLA i PSR z PGDA wykluczają
@@ -110,8 +120,6 @@ Aktualizacja: 2026-11-14
 
 ## Do zrobienia
 
-- Uzupełnić `GET /layers/{id}/grid` o `illumination` i `earth-visibility`
-  z danych PGDA.
 - Następnie `/validation`: porównać średnie oświetlenie z obliczeń backendu,
   PGDA i LROC oraz zwrócić jedną liczbę do prezentacji.
 - Zweryfikować współrzędne czterech miejsc demo na niezależnym źródle i dopiero
@@ -138,3 +146,7 @@ Aktualizacja: 2026-11-14
   profilem DEM mogą trwać kilkadziesiąt sekund.
 - Pierwszy odczyt rastra PSR może trwać dłużej; jego GeoTIFF waży około 154 MB,
   a czas odczytu zależy od dostępności serwera PGDA.
+- Siatki oświetlenia i widoczności Ziemi korzystają z produktów PGDA dla
+  regionów polarnych 65–90°N/S; poza nimi zwracają `null`. Używane mapy mają
+  rozdzielczość 120 lub 240 m/px, a nie deklarowaną w pierwotnym kontrakcie
+  LROC WAC 100 m/px.

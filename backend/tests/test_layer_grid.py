@@ -172,7 +172,6 @@ def test_psr_grid_endpoint_returns_layer_contract(monkeypatch):
     ("layer_id", "params", "expected_status", "expected_code"),
     [
         ("not-a-layer", {"lat": 0, "lon": 0}, 404, "LAYER_NOT_FOUND"),
-        ("illumination", {"lat": 0, "lon": 0}, 422, "LAYER_GRID_UNAVAILABLE"),
         ("slope", {"lat": 0, "lon": 0, "sizeKm": 15}, 422, "VALIDATION_ERROR"),
         ("psr", {"lat": 0, "lon": 0, "res": 513}, 422, "VALIDATION_ERROR"),
         ("psr", {"lat": 0, "lon": 0, "res": "invalid"}, 422, "VALIDATION_ERROR"),
