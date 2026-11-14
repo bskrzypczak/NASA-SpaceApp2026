@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 from types import SimpleNamespace
 
 import httpx
@@ -13,6 +14,7 @@ from app.sources import (
     PermanentShadowDataError,
     _fetch_dem_sample,
     _fetch_permanent_shadow,
+    _get_json,
     _heightmap_export_params,
     _heightmap_from_dem,
     _horizon_profile_from_dem,
@@ -22,6 +24,34 @@ from app.sources import (
     _slope_from_cardinal_samples,
     fetch_lunar_elevation,
 )
+
+
+def test_upstream_request_failure_logs_original_exception(caplog):
+    request = httpx.Request("GET", "https://example.test/data")
+    failure = httpx.ConnectError("connection refused", request=request)
+
+    def fail_request(failed_request):
+        assert failed_request.url == request.url
+        raise failure
+
+    async def fetch():
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(fail_request)
+        ) as client:
+            await _get_json(client, "https://example.test/data", {})
+
+    caplog.set_level(logging.ERROR, logger="app.sources")
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(fetch())
+
+    assert exc_info.value.status_code == 502
+    log_record = next(
+        record
+        for record in caplog.records
+        if record.name == "app.sources" and record.exc_info is not None
+    )
+    assert log_record.exc_info[0] is httpx.ConnectError
+    assert log_record.exc_info[1] is failure
 
 
 def test_slope_uses_central_difference_and_returns_degrees():

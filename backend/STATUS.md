@@ -31,6 +31,10 @@ Aktualizacja: 2026-11-14
   rzeczywiste efemerydy łączone są z maską horyzontu, widocznością tarcz,
   oknami, zdarzeniami, baterią i oceną powodzenia. Obsługiwane są tryby `real`
   i `flat`; `includeTimeseries: false` ogranicza wielkość odpowiedzi.
+- Metryki widoczności misji (`sunlitPct`, `earthVisiblePct`, `bothPct`) liczą
+  wyłącznie próbki do końca misji, nawet gdy okno symulacji jest dłuższe.
+- Błędy źródeł zewnętrznych są logowane po stronie serwera wraz z tracebackiem
+  oryginalnego wyjątku; odpowiedzi API nadal nie ujawniają szczegółów wewnętrznych.
 - Dodano `POST /api/v1/calendar`: ocena kolejnych dni lądowania tym samym
   silnikiem co symulacje, grupowanie wyników w miesiące, dzień najlepszy,
   godzinowe próbkowanie Horizons i porcjowanie długich zakresów do limitu
@@ -44,7 +48,7 @@ Aktualizacja: 2026-11-14
   Podłączono odczyt wartości `inPermanentShadow` z rastra PSR PGDA (20 m/px,
   80–90°S); piksele NoData i punkty poza zasięgiem pozostają `null`. Live
   sprawdzono wynik `true` dla `(-88, 0)` i `false` dla `(-89.45, -137.3)`.
-- Testy backendu: `50 passed`.
+- Testy backendu: `52 passed`.
 - Live dla `(-89.45, -137.3)`: DEM zwrócił wysokość `1956 m`, próbki N/S/E/W
   `1954`, `1955.5`, `1953` i `1952.5 m`, a nachylenie `0.453°`.
   Projekcję północną sprawdzono dodatkowo względem wartości z eksportu GeoTIFF.

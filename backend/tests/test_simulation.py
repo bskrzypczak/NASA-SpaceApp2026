@@ -86,6 +86,47 @@ def test_simulation_calculates_windows_events_battery_and_score():
     ]
 
 
+def test_mission_visibility_metrics_ignore_ephemeris_after_mission_end():
+    request = SimulationRequest(
+        site={"lat": -89.0, "lon": 0.0},
+        landingTime=datetime(2027, 3, 14, 6, tzinfo=timezone.utc),
+        missionDays=1,
+        windowDays=2,
+        stepMin=720,
+        horizonModel="flat",
+    )
+    ephemeris = {
+        "sun": {
+            "azDeg": [0.0] * 4,
+            "elDeg": [0.734, -3.266, -3.266, 0.734],
+        },
+        "earth": {
+            "azDeg": [0.0] * 4,
+            "elDeg": [0.05, -3.95, -3.95, 0.05],
+        },
+    }
+
+    result = build_simulation_result(
+        request=request,
+        input_echo={},
+        site={"name": "Test site", "lat": -89.0, "lon": 0.0, "elevationM": 0.0},
+        ephemeris=ephemeris,
+        sun_horizon=None,
+        earth_horizon=None,
+        simulation_id="sim_mission_metrics",
+        created_at="2027-03-14T06:00:00Z",
+        weights={"power": 0.5, "comms": 0.3, "night": 0.2},
+    )
+
+    assert result["summary"]["sunlitPct"] == 12.5
+    assert result["summary"]["earthVisiblePct"] == 12.5
+    assert result["summary"]["bothPct"] == 12.5
+    assert result["windows"]["both"] == [
+        {"fromDay": 0.0, "toDay": 0.125},
+        {"fromDay": 1.375, "toDay": 2.0},
+    ]
+
+
 def test_simulation_rejects_malformed_horizon_profile():
     with pytest.raises(ValueError, match="invalid shape"):
         interpolate_horizon(

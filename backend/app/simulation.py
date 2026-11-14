@@ -319,11 +319,21 @@ def _calculate_case(
         both_clearances, request.stepMin / 1440, request.windowDays
     )
 
+    mission_sample_count = request.missionDays * 1440 // request.stepMin
     mission_sun_windows = _visibility_windows(
-        sun_clearances, request.stepMin / 1440, request.missionDays
+        sun_clearances[:mission_sample_count],
+        request.stepMin / 1440,
+        request.missionDays,
     )
     mission_earth_windows = _visibility_windows(
-        earth_clearances, request.stepMin / 1440, request.missionDays
+        earth_clearances[:mission_sample_count],
+        request.stepMin / 1440,
+        request.missionDays,
+    )
+    mission_both_windows = _visibility_windows(
+        both_clearances[:mission_sample_count],
+        request.stepMin / 1440,
+        request.missionDays,
     )
     step_days = request.stepMin / 1440
     step_hours = request.stepMin / 60
@@ -340,12 +350,7 @@ def _calculate_case(
     min_soc_day, min_soc_pct = min(mission_soc, key=lambda value: value[1])
     sunlit_pct = _window_percent(mission_sun_windows, request.missionDays)
     earth_visible_pct = _window_percent(mission_earth_windows, request.missionDays)
-    both_pct = _window_percent(
-        _visibility_windows(
-            both_clearances, step_days, request.missionDays
-        ),
-        request.missionDays,
-    )
+    both_pct = _window_percent(mission_both_windows, request.missionDays)
     longest_night_h = _longest_gap_hours(
         mission_sun_windows, request.missionDays
     )

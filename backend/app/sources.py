@@ -2,6 +2,7 @@ import asyncio
 import csv
 import io
 import json
+import logging
 import math
 import re
 import time
@@ -10,6 +11,8 @@ from typing import Any
 
 import httpx
 from fastapi import HTTPException
+
+logger = logging.getLogger(__name__)
 
 HORIZONS_URL = "https://ssd.jpl.nasa.gov/api/horizons.api"
 MOON_TREK_BASE = "https://trek.nasa.gov/moon/trekarcgis/rest/services"
@@ -89,7 +92,21 @@ def _cache_set(key: str, value: dict[str, Any], ttl: int) -> None:
     _cache[key] = (now + ttl, value)
 
 
-def _upstream_error(message: str, status_code: int = 502) -> HTTPException:
+def _upstream_error(
+    message: str,
+    status_code: int = 502,
+    *,
+    cause: Exception | None = None,
+) -> HTTPException:
+    if cause is None:
+        logger.error("Upstream request failed: %s (status %s)", message, status_code)
+    else:
+        logger.error(
+            "Upstream request failed: %s (status %s)",
+            message,
+            status_code,
+            exc_info=(type(cause), cause, cause.__traceback__),
+        )
     code = "TIMEOUT" if status_code == 504 else "UPSTREAM_ERROR"
     return HTTPException(
         status_code=status_code,
@@ -109,18 +126,25 @@ async def _get_json(
         response = await client.get(url, params=params)
         response.raise_for_status()
     except httpx.TimeoutException as exc:
-        raise _upstream_error("The upstream data service timed out.", 504) from exc
+        raise _upstream_error(
+            "The upstream data service timed out.", 504, cause=exc
+        ) from exc
     except httpx.HTTPStatusError as exc:
         raise _upstream_error(
-            f"The upstream data service returned HTTP {exc.response.status_code}."
+            f"The upstream data service returned HTTP {exc.response.status_code}.",
+            cause=exc,
         ) from exc
     except httpx.RequestError as exc:
-        raise _upstream_error("The upstream data service could not be reached.") from exc
+        raise _upstream_error(
+            "The upstream data service could not be reached.", cause=exc
+        ) from exc
 
     try:
         payload = response.json()
     except (ValueError, json.JSONDecodeError) as exc:
-        raise _upstream_error("The upstream data service returned invalid JSON.") from exc
+        raise _upstream_error(
+            "The upstream data service returned invalid JSON.", cause=exc
+        ) from exc
     if not isinstance(payload, dict):
         raise _upstream_error("The upstream data service returned an unexpected response.")
     if "error" in payload:
@@ -515,13 +539,18 @@ async def fetch_lunar_heightmap(
             response = await client.get(export_url, params=params)
             response.raise_for_status()
     except httpx.TimeoutException as exc:
-        raise _upstream_error("The lunar DEM export timed out.", 504) from exc
+        raise _upstream_error(
+            "The lunar DEM export timed out.", 504, cause=exc
+        ) from exc
     except httpx.HTTPStatusError as exc:
         raise _upstream_error(
-            f"The lunar DEM service returned HTTP {exc.response.status_code}."
+            f"The lunar DEM service returned HTTP {exc.response.status_code}.",
+            cause=exc,
         ) from exc
     except httpx.RequestError as exc:
-        raise _upstream_error("The lunar DEM service could not be reached.") from exc
+        raise _upstream_error(
+            "The lunar DEM service could not be reached.", cause=exc
+        ) from exc
 
     if not response.content.startswith((b"II*\x00", b"MM\x00*")):
         raise _upstream_error("The lunar DEM service returned an invalid TIFF.")
@@ -545,7 +574,9 @@ async def fetch_lunar_heightmap(
             },
         ) from exc
     except HeightmapDataError as exc:
-        raise _upstream_error("The lunar DEM could not be processed.") from exc
+        raise _upstream_error(
+            "The lunar DEM could not be processed.", cause=exc
+        ) from exc
 
     heightmap_keys = [
         item_key for item_key in _cache if item_key.startswith("heightmap:")
@@ -761,13 +792,18 @@ async def fetch_horizon(
             response = await client.get(HORIZON_DEM_EXPORT_URL, params=params)
             response.raise_for_status()
     except httpx.TimeoutException as exc:
-        raise _upstream_error("The lunar DEM export timed out.", 504) from exc
+        raise _upstream_error(
+            "The lunar DEM export timed out.", 504, cause=exc
+        ) from exc
     except httpx.HTTPStatusError as exc:
         raise _upstream_error(
-            f"The lunar DEM service returned HTTP {exc.response.status_code}."
+            f"The lunar DEM service returned HTTP {exc.response.status_code}.",
+            cause=exc,
         ) from exc
     except httpx.RequestError as exc:
-        raise _upstream_error("The lunar DEM service could not be reached.") from exc
+        raise _upstream_error(
+            "The lunar DEM service could not be reached.", cause=exc
+        ) from exc
 
     if not response.content.startswith((b"II*\x00", b"MM\x00*")):
         raise _upstream_error("The lunar DEM service returned an invalid TIFF.")
@@ -790,7 +826,9 @@ async def fetch_horizon(
             },
         ) from exc
     except HorizonDataError as exc:
-        raise _upstream_error("The lunar DEM could not be processed.") from exc
+        raise _upstream_error(
+            "The lunar DEM could not be processed.", cause=exc
+        ) from exc
 
     result = {
         "lat": lat,
@@ -844,7 +882,9 @@ async def _fetch_permanent_shadow(lat: float, lon: float) -> bool | None:
     try:
         raster_value = await asyncio.to_thread(_read_psr_raster_value, lat, lon)
     except PermanentShadowDataError as exc:
-        raise _upstream_error("The PGDA PSR map could not be reached.") from exc
+        raise _upstream_error(
+            "The PGDA PSR map could not be reached.", cause=exc
+        ) from exc
     if raster_value is None or not math.isfinite(raster_value):
         return None
     return raster_value > 0.5
@@ -992,7 +1032,9 @@ async def _fetch_horizons_body(
     try:
         return _parse_horizons_response(payload)
     except (ValueError, TypeError, IndexError, KeyError) as exc:
-        raise _upstream_error("JPL Horizons returned an invalid ephemeris table.") from exc
+        raise _upstream_error(
+            "JPL Horizons returned an invalid ephemeris table.", cause=exc
+        ) from exc
 
 
 async def fetch_ephemeris(

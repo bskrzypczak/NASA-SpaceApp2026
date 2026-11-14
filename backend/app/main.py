@@ -2,6 +2,7 @@ import asyncio
 import hashlib
 import io
 import json
+import logging
 import math
 import os
 from datetime import datetime, time, timedelta, timezone
@@ -32,6 +33,8 @@ from app.sources import (
     fetch_lunar_elevation,
     fetch_lunar_heightmap,
 )
+
+logger = logging.getLogger(__name__)
 
 API_PREFIX = "/api/v1"
 LUNAR_RADIUS_KM = 1737.4
@@ -166,6 +169,7 @@ async def _fetch_calendar_ephemeris(
                 try:
                     values = response[body][field]
                 except (KeyError, TypeError) as exc:
+                    logger.exception("JPL Horizons returned incomplete calendar data.")
                     raise HTTPException(
                         status_code=502,
                         detail={
@@ -176,6 +180,14 @@ async def _fetch_calendar_ephemeris(
                         },
                     ) from exc
                 if len(values) != expected_count:
+                    logger.error(
+                        "JPL Horizons returned an unexpected calendar sample count "
+                        "for %s.%s: expected %s, received %s.",
+                        body,
+                        field,
+                        expected_count,
+                        len(values),
+                    )
                     raise HTTPException(
                         status_code=502,
                         detail={
@@ -191,6 +203,10 @@ async def _fetch_calendar_ephemeris(
         for body in ("sun", "earth")
         for field in ("azDeg", "elDeg")
     ):
+        logger.error(
+            "JPL Horizons returned an incomplete calendar range: expected %s samples.",
+            total_samples,
+        )
         raise HTTPException(
             status_code=502,
             detail={
@@ -679,6 +695,7 @@ async def create_simulation(request: SimulationRequest) -> dict:
             weights=weights,
         )
     except ValueError as exc:
+        logger.exception("Could not process upstream data for the simulation.")
         raise HTTPException(
             status_code=502,
             detail={
@@ -850,6 +867,7 @@ async def create_calendar(request: CalendarRequest) -> dict:
             earth_horizon=earth_horizon,
         )
     except (KeyError, TypeError, ValueError) as exc:
+        logger.exception("Could not process upstream data for the calendar.")
         raise HTTPException(
             status_code=502,
             detail={
