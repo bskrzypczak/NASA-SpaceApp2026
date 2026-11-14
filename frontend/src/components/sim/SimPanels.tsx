@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import type { DayWindow, ScoreFactor, SimEvent, SimSummary } from '../../api/types';
 import type { SkyState } from '../../lib/sky';
 
@@ -170,6 +171,9 @@ export function SuccessCard({
           )}
         </div>
       )}
+      <Link to="/dates" className="btn btn--primary">
+        Find a better date
+      </Link>
       <p className="muted" style={{ margin: 0, fontSize: 12 }}>
         Heuristic: 0.5 power + 0.3 comms + 0.2 night length — not a probability.
       </p>

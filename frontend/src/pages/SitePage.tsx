@@ -7,6 +7,7 @@ import { useApi } from '../hooks/useApi';
 import { apiMode, getTerrainPoint } from '../api/client';
 import { SITES } from '../data/sites';
 import { formatLat, formatLon, fromQuery, parseLat, parseLon, toQuery } from '../lib/coords';
+import { TERRAIN_LIMIT_NOTE, terrainSimAvailable } from '../lib/requests';
 
 /** Screen 3 — the chosen landing point. The confirm popup (screen 4) renders in the <Outlet />. */
 export function SitePage() {
@@ -89,6 +90,10 @@ export function SitePage() {
         {terrain.error && <p className="error" style={{ margin: 0 }}>{terrain.error.message}</p>}
 
         <MissionForm />
+        <Link to="/dates" className="btn" style={{ justifyContent: 'space-between', textTransform: 'none', letterSpacing: 0 }}>
+          <span>📅 Compare landing dates</span>
+          <span className="muted mono">calendar →</span>
+        </Link>
 
         <button type="button" className="btn nearby-link" disabled title="Sensitivity map — next sprint">
           <span>◎ See better places nearby</span>
@@ -103,7 +108,7 @@ export function SitePage() {
           ▶ Start simulation
         </button>
         <p className="muted" style={{ margin: '-12px 0 0', fontSize: 13, textAlign: 'center' }}>
-          Sun &amp; Earth from JPL Horizons · terrain from LOLA
+          {terrainSimAvailable(lat) ? 'Sun & Earth from JPL Horizons · terrain from LOLA' : `ⓘ ${TERRAIN_LIMIT_NOTE}`}
         </p>
       </aside>
 

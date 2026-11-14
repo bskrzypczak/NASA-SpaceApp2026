@@ -88,6 +88,16 @@ Trasy: `/simulation/new` (uruchamia `POST /simulations` z ustawień z ekranów 1
 - Miejsca na północ od 80° S: backend nie ma tam DEM → wysyłamy `horizonModel: "flat"` automatycznie.
 - **Tryb mock:** `src/lib/simModel.ts` to port 1:1 wzorów z `backend/app/simulation.py` (sprawdzony — te same wyniki na tych samych danych wejściowych).
 
+## Ekran 8 · Compare dates (`/dates`)
+
+Wejścia: „Compare landing dates” na ekranie Site, „Compare dates” i „Find a better date” na ekranie Simulation.
+
+- `POST /calendar` dla dwóch widocznych miesięcy (‹ › przewija). Każdy dzień: szansa powodzenia, kolor + ▼ dla ryzykownych, ★ BEST, YOURS.
+- Panel wybranego dnia: wynik, różnica dni względem Twojej daty, porównanie pasków, min. bateria / % Ziemi / najdłuższa noc. **Simulate this date** ustawia datę i uruchamia symulację; **Set as landing date** wraca do Site.
+- **12-month outlook** ładowany na żądanie (cały rok liczy się długo). Po załadowaniu miesiące z tego samego roku nie wysyłają już zapytań.
+- Wyniki kalendarza są cache'owane w przeglądarce per zapytanie. Kalendarz liczy co godzinę, symulacja co 10 min — dzień może się różnić o 1–2 pkt.
+- Pole `season` z backendu celowo nie jest pokazywane (zobacz notatkę dla backendu).
+
 ## Backend i tryby API
 
 Skopiuj `.env.example` do `.env.local`:

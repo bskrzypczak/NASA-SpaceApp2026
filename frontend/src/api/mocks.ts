@@ -1,4 +1,4 @@
-import type { Heightmap, HorizonProfile, SimulationRequest, SimulationResult, TerrainPoint } from './types';
+import type { CalendarRequest, CalendarResult, Heightmap, HorizonProfile, SimulationRequest, SimulationResult, TerrainPoint } from './types';
 import { DEFAULT_HARDWARE, DEFAULT_WEIGHTS, calculateCase, interpolateHorizon } from '../lib/simModel';
 
 /** Small deterministic PRNG so the same point always gives the same mock terrain. */
@@ -85,12 +85,12 @@ export function mockHeightmap(lat: number, lon: number, sizeKm = 20, res = 256):
 
 export function mockHorizon(lat: number, lon: number, heightM = 2): HorizonProfile {
   const r = rng(seedFrom(lat, lon) + 17);
-  const bumps = Array.from({ length: 5 }, () => ({ az: r() * 360, width: 15 + r() * 40, height: 0.6 + r() * 1.6 }));
+  const bumps = Array.from({ length: 5 }, () => ({ az: r() * 360, width: 15 + r() * 40, height: 0.3 + r() * 1.0 }));
   const azimuthDeg: number[] = [];
   const elevationDeg: number[] = [];
   for (let i = 0; i < 720; i++) {
     const az = i * 0.5;
-    let el = 0.25 + 0.15 * Math.sin((az * Math.PI) / 30);
+    let el = 0.1 + 0.1 * Math.sin((az * Math.PI) / 30);
     for (const b of bumps) {
       const d = Math.min(Math.abs(az - b.az), 360 - Math.abs(az - b.az));
       el += b.height * Math.exp(-(d * d) / (2 * b.width * b.width));
@@ -106,10 +106,11 @@ export function mockSimulation(req: SimulationRequest): SimulationResult {
   const lat = 'lat' in req.site ? req.site.lat : -89.45;
   const lon = 'lon' in req.site ? req.site.lon : -137.3;
   const n = Math.round((req.windowDays * 1440) / req.stepMin);
+  const phase0 = (req as SimulationRequest & { phaseOffsetDays?: number }).phaseOffsetDays ?? 0;
   const colat = 90 - Math.abs(lat);
   const sunAz: number[] = [], sunEl: number[] = [], earthAz: number[] = [], earthEl: number[] = [];
   for (let i = 0; i < n; i++) {
-    const d = (i * req.stepMin) / 1440;
+    const d = (i * req.stepMin) / 1440 + phase0;
     const phase = (2 * Math.PI * d) / 29.53;
     sunAz.push(((120 + (360 * d) / 29.53) % 360 + 360) % 360);
     sunEl.push(colat * Math.cos(phase + 0.4) * (colat > 10 ? 1 : 0.4) + 1.2 * Math.sin(phase * 0.08 + 1));
@@ -138,4 +139,44 @@ export function mockSimulation(req: SimulationRequest): SimulationResult {
     summary: { ...actual.summary, flatHorizonSuccessPct: flat.summary.successPct },
     mock: true,
   };
+}
+
+/** Mock calendar: one mock simulation per landing day, hourly samples (like the backend). */
+export function mockCalendar(req: CalendarRequest): CalendarResult {
+  const lat = 'lat' in req.site ? req.site.lat : -89.45;
+  const lon = 'lon' in req.site ? req.site.lon : -137.3;
+  const from = Date.parse(`${req.from}T${req.landingTimeOfDay.replace('Z', '')}Z`);
+  const to = Date.parse(`${req.to}T00:00:00Z`);
+  const days: CalendarResult['days'] = [];
+  for (let ms = from; ms <= to + 86_400_000 - 1; ms += 86_400_000) {
+    const date = new Date(ms).toISOString().slice(0, 10);
+    // Shift the mock sky by the landing date so days differ.
+    const offsetDays = (ms - Date.parse('2027-01-01T00:00:00Z')) / 86_400_000;
+    const sim = mockSimulation({
+      site: { lat, lon },
+      landingTime: new Date(ms).toISOString(),
+      missionDays: req.missionDays,
+      windowDays: req.missionDays,
+      stepMin: 60,
+      horizonModel: req.horizonModel,
+      hardware: req.hardware,
+      phaseOffsetDays: offsetDays,
+    } as SimulationRequest & { phaseOffsetDays: number });
+    days.push({
+      date,
+      successPct: sim.summary.successPct,
+      minSocPct: sim.summary.minSocPct,
+      earthVisiblePct: sim.summary.earthVisiblePct,
+      longestNightH: sim.summary.longestNightH,
+    });
+  }
+  const best = days.reduce((a, b) => (b.successPct > a.successPct ? b : a), days[0]);
+  const byMonth = new Map<string, typeof days>();
+  for (const d of days) byMonth.set(d.date.slice(0, 7), [...(byMonth.get(d.date.slice(0, 7)) ?? []), d]);
+  const months = [...byMonth.entries()].map(([month, ds]) => ({
+    month,
+    goodDays: ds.filter((d) => d.successPct >= 80).length,
+    bestPct: Math.max(...ds.map((d) => d.successPct)),
+  }));
+  return { days, best: { date: best.date, successPct: best.successPct }, months, mock: true };
 }

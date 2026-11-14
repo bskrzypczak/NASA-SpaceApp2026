@@ -1,6 +1,6 @@
-import type { ApiErrorBody, ApiSite, Heightmap, HorizonProfile, LayerInfo, SimulationRequest, SimulationResult, TerrainPoint } from './types';
+import type { ApiErrorBody, ApiSite, CalendarRequest, CalendarResult, Heightmap, HorizonProfile, LayerInfo, SimulationRequest, SimulationResult, TerrainPoint } from './types';
 import { SITES } from '../data/sites';
-import { mockHeightmap, mockHorizon, mockSimulation, mockTerrainPoint } from './mocks';
+import { mockCalendar, mockHeightmap, mockHorizon, mockSimulation, mockTerrainPoint } from './mocks';
 
 const BASE = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '');
 const USE_MOCKS = import.meta.env.VITE_USE_MOCKS === 'true';
@@ -151,4 +151,14 @@ export async function getSimulation(id: string, signal?: AbortSignal): Promise<S
   const hit = mockStore.get(id);
   if (hit) return hit;
   throw new ApiError('NOT_FOUND', 'Simulation not found (mock results are kept only until reload).', 404);
+}
+
+/** POST /calendar — one score per landing day. Synchronous on the backend: a full year can take a while. */
+export async function getCalendar(req: CalendarRequest, signal?: AbortSignal): Promise<CalendarResult> {
+  if (apiMode === 'live') return post<CalendarResult>('/calendar', req, signal);
+  if (apiMode === 'mock') {
+    await new Promise((r) => setTimeout(r, 500));
+    return mockCalendar(req);
+  }
+  throw new ApiError('BACKEND_OFFLINE', 'No backend configured. Set VITE_API_URL or VITE_USE_MOCKS=true in .env.local.');
 }

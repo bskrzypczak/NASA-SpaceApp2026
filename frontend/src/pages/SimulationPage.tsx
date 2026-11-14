@@ -12,6 +12,7 @@ import { SimScene3D, VERTICAL_EXAGGERATION, type CameraMode } from '../component
 import { SkyView } from '../components/sim/SkyView';
 import { StatusCards, SuccessCard, Timeline } from '../components/sim/SimPanels';
 import { DEFAULT_HARDWARE } from '../lib/simModel';
+import { TERRAIN_LIMIT_NOTE, defaultHorizonModel, siteRef } from '../lib/requests';
 
 const WINDOW_DAYS = 30;
 const STEP_MIN = 10; // 30 d × 144 = 4320 samples = backend limit
@@ -19,15 +20,14 @@ const STEP_MIN = 10; // 30 d × 144 = 4320 samples = backend limit
 /* ---------- Request helpers ---------- */
 
 function requestFromSelection(sel: SelectionState, horizonModel?: HorizonModel): SimulationRequest {
-  const site = SITES.find((s) => s.name === sel.name && s.lat === sel.lat && s.lon === sel.lon);
   return {
-    site: site ? { siteId: site.id } : { lat: +sel.lat.toFixed(5), lon: +sel.lon.toFixed(5) },
+    site: siteRef(sel),
     landingTime: `${sel.landingTime}:00Z`,
     missionDays: sel.missionDays,
     windowDays: WINDOW_DAYS,
     stepMin: STEP_MIN,
     // Real terrain needs the polar DEM (≤ 80° S); elsewhere fall back to a flat horizon.
-    horizonModel: horizonModel ?? (sel.lat <= -80 ? 'real' : 'flat'),
+    horizonModel: horizonModel ?? defaultHorizonModel(sel.lat),
     includeTimeseries: true,
   };
 }
@@ -226,13 +226,18 @@ export function SimulationPage() {
           </button>
         </div>
         <div className="segmented" role="group" aria-label="Horizon model">
-          <button type="button" aria-pressed={!showFlat} disabled={!baseIsReal} onClick={() => toggleHorizon(false)} title={baseIsReal ? '' : 'No polar DEM here (north of 80° S)'}>
+          <button type="button" aria-pressed={!showFlat && baseIsReal} disabled={!baseIsReal} onClick={() => toggleHorizon(false)} title={baseIsReal ? '' : TERRAIN_LIMIT_NOTE}>
             Real terrain (LOLA)
           </button>
           <button type="button" aria-pressed={showFlat || !baseIsReal} onClick={() => toggleHorizon(true)}>
             {flatLoading ? 'Flat horizon…' : 'Flat horizon'}
           </button>
         </div>
+        {!baseIsReal && (
+          <span className="badge" role="note">
+            ⓘ {TERRAIN_LIMIT_NOTE}
+          </span>
+        )}
         {view === '3d' && (
           <div className="segmented" role="group" aria-label="Camera">
             {(['orbit', 'lander', 'top'] as CameraMode[]).map((c) => (
@@ -244,6 +249,9 @@ export function SimulationPage() {
         )}
         <div className="sim-toolbar__right">
           {(shown.mock || apiMode === 'mock') && <span className="badge badge--warn">MOCK DATA</span>}
+          <Link to="/dates" className="btn">
+            Compare dates
+          </Link>
           <button type="button" className="btn" disabled title="Mission brief — next sprint">
             Mission brief
           </button>

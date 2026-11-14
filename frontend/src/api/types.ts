@@ -179,3 +179,40 @@ export interface SimulationResult {
   timeseries?: SimTimeseries;
   mock?: boolean;
 }
+
+/* ---------- Calendar (backend §4.8) ---------- */
+
+export interface CalendarRequest {
+  site: { siteId: string } | { lat: number; lon: number };
+  /** YYYY-MM-DD */
+  from: string;
+  to: string;
+  /** "HH:MM:SSZ" */
+  landingTimeOfDay: string;
+  missionDays: number;
+  horizonModel: HorizonModel;
+  hardware?: Partial<Hardware>;
+}
+
+export interface CalendarDay {
+  date: string;
+  successPct: number;
+  minSocPct: number;
+  earthVisiblePct: number;
+  longestNightH: number;
+}
+
+export interface CalendarMonth {
+  /** YYYY-MM */
+  month: string;
+  goodDays: number;
+  bestPct: number;
+  season?: string;
+}
+
+export interface CalendarResult {
+  days: CalendarDay[];
+  best: { date: string; successPct: number };
+  months: CalendarMonth[];
+  mock?: boolean;
+}
