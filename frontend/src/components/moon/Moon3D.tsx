@@ -9,6 +9,7 @@ import { SpaceBackground } from '../space/SpaceBackground';
 import { useSelection } from '../../store/selection';
 import { latLonToVector } from '../../lib/geo';
 import { formatLat, formatLon, type LatLon } from '../../lib/coords';
+import './moon.css';
 
 const MIN_DIST = 1.08; // closest zoom (Moon radius = 1)
 const MAX_DIST = 6;

@@ -8,6 +8,7 @@ import { TextureBoundary } from '../moon/TextureBoundary';
 import { EARTH_TEXTURE_URL } from '../route/RouteScene';
 import { azElToVector, exaggerate, type SkyState } from '../../lib/sky';
 import type { HorizonProfile } from '../../api/types';
+import './sim.css';
 
 export const VERTICAL_EXAGGERATION = 10;
 export type CameraMode = 'orbit' | 'lander' | 'top';

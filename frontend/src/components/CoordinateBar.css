@@ -1,0 +1,30 @@
+/* ---------- Coordinate bar ---------- */
+.coord-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 16px;
+  padding: 16px 20px;
+  border-radius: var(--radius-md);
+  background: var(--deep-blue);
+  border: 1px solid var(--border);
+}
+
+.coord-bar .field {
+  width: 160px;
+}
+
+.coord-bar__readout {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 120px;
+}
+
+.coord-bar__readout .value {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  font: 400 16px var(--font-mono);
+}

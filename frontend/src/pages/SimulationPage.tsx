@@ -13,6 +13,7 @@ import { SkyView } from '../components/sim/SkyView';
 import { StatusCards, SuccessCard, Timeline } from '../components/sim/SimPanels';
 import { DEFAULT_HARDWARE } from '../lib/simModel';
 import { defaultHorizonModel, siteRef } from '../lib/requests';
+import './SimulationPage.css';
 
 const WINDOW_DAYS = 30;
 const STEP_MIN = 10; // 30 d × 144 = 4320 samples = backend limit

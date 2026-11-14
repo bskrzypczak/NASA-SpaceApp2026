@@ -1,5 +1,6 @@
 import { useEffect, useRef, type MouseEvent } from 'react';
 import type { Heightmap } from '../../api/types';
+import './site-map.css';
 
 /** Light from the upper left, low over the horizon — reads well as relief. */
 const LIGHT_AZ_DEG = 315;

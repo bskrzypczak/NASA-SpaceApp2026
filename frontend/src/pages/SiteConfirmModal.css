@@ -1,0 +1,55 @@
+/* ---------- Confirm popup (screen 4) ---------- */
+.modal--xl {
+  max-width: 1280px;
+}
+
+.confirm__route {
+  flex: 999 1 620px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.confirm__scene {
+  position: relative;
+  height: 440px;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: #020611;
+  touch-action: none;
+}
+
+.confirm__legs {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.confirm__legs li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.confirm__side {
+  flex: 1 1 340px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+@media (max-width: 720px) {
+  .confirm__legs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

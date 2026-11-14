@@ -7,6 +7,7 @@ import { useApi } from '../hooks/useApi';
 import { apiMode, getTerrainPoint } from '../api/client';
 import { SITES } from '../data/sites';
 import { formatLat, formatLon, fromQuery, parseLat, parseLon, toQuery } from '../lib/coords';
+import './SitePage.css';
 
 /** Screen 3 — the chosen landing point. The confirm popup (screen 4) renders in the <Outlet />. */
 export function SitePage() {

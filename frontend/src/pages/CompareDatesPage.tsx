@@ -6,6 +6,7 @@ import { useSelection } from '../store/selection';
 import { useScenarios } from '../store/scenarios';
 import { defaultHorizonModel, siteRef } from '../lib/requests';
 import { toQuery } from '../lib/coords';
+import './CompareDatesPage.css';
 
 /* ---------- date helpers (all UTC, "YYYY-MM-DD") ---------- */
 const iso = (d: Date) => d.toISOString().slice(0, 10);

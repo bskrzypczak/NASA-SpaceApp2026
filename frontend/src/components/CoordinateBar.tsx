@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { parseLat, parseLon, type LatLon } from '../lib/coords';
+import './CoordinateBar.css';
 
 interface CoordinateBarProps {
   value: LatLon;

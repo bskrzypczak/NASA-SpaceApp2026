@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import type { HorizonProfile, SimTimeseries } from '../../api/types';
 import type { SkyState } from '../../lib/sky';
+import './sim.css';
 
 const W = 1440;
 const H = 420;

@@ -5,6 +5,7 @@ import { useApi } from '../../hooks/useApi';
 import { apiMode, getHeightmap, getLayers } from '../../api/client';
 import type { LayerId } from '../../api/types';
 import { formatLat, formatLon, type LatLon } from '../../lib/coords';
+import './site-map.css';
 
 type View = 'imagery' | 'terrain';
 const TERRAIN_SIZES_KM = [5, 10, 20, 40];

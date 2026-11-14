@@ -10,6 +10,7 @@ import type { LaunchSite } from '../../data/launchSites';
 import type { LatLon } from '../../lib/coords';
 import type { TransferType } from '../../store/selection';
 import { EARTH_MOON_DISTANCE_KM, TRANSFERS, formatDuration, totalHours } from '../../data/route';
+import './route.css';
 
 /** NASA Blue Marble, equirectangular, left edge 180° W (see README → "Earth texture"). */
 export const EARTH_TEXTURE_URL = '/textures/earth_color.jpg';

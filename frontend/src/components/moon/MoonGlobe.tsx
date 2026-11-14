@@ -6,6 +6,7 @@ import { useSelection } from '../../store/selection';
 import { SITES } from '../../data/sites';
 import { latLonToVector, vectorToLatLon } from '../../lib/geo';
 import { formatLat, formatLon, type LatLon } from '../../lib/coords';
+import './moon.css';
 
 /** Put the Moon color map here (see README → "Moon texture"). */
 export const MOON_TEXTURE_URL = '/textures/moon_color.jpg';

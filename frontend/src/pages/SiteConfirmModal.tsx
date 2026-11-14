@@ -7,6 +7,7 @@ import { useSelection, type TransferType } from '../store/selection';
 import { launchSiteById } from '../data/launchSites';
 import { TRANSFERS, formatDuration, subtractHours, totalHours } from '../data/route';
 import { formatLat, formatLon, toQuery } from '../lib/coords';
+import './SiteConfirmModal.css';
 
 /** Screen 4 — confirmation popup over the Site screen. Route: /site/confirm */
 export function SiteConfirmModal() {

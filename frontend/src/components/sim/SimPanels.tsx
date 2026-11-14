@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import type { DayWindow, ScoreFactor, SimEvent, SimSummary } from '../../api/types';
 import type { SkyState } from '../../lib/sky';
+import './sim.css';
 
 const RED = 'var(--danger-text)';
 

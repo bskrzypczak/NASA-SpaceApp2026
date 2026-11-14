@@ -1,5 +1,6 @@
 import { LAUNCH_SITES, DEFAULT_LAUNCH_SITE_ID } from '../../data/launchSites';
 import { formatLat, formatLon } from '../../lib/coords';
+import './route.css';
 
 /** Radio list of launch sites; the NASA pad is the default. */
 export function LaunchSitePicker({ value, onChange }: { value: string; onChange: (id: string) => void }) {

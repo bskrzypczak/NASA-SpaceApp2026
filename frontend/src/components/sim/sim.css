@@ -1,0 +1,276 @@
+.sky-view {
+  display: block;
+  height: 100%;
+}
+
+.sky-axis {
+  fill: var(--text-muted);
+  font: 400 12px var(--font-mono);
+}
+
+.sky-chip {
+  fill: var(--deep-blue);
+  stroke-width: 1.5;
+}
+
+.sky-chip.is-sun {
+  stroke: var(--sun);
+}
+
+.sky-chip.is-earth {
+  stroke: var(--earth);
+}
+
+.sky-chip.is-blocked {
+  stroke: var(--danger-text);
+}
+
+.sky-chip-text {
+  font: 500 13px var(--font-mono);
+}
+
+.sky-chip-text.is-sun {
+  fill: var(--sun);
+}
+
+.sky-chip-text.is-earth {
+  fill: var(--earth);
+}
+
+.sky-chip-text.is-blocked {
+  fill: var(--danger-text);
+}
+
+.sim-chip {
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--deep-blue);
+  border: 1.5px solid var(--border-strong);
+  font: 500 13px var(--font-mono);
+  white-space: nowrap;
+}
+
+.sim-chip--sun {
+  border-color: var(--sun);
+  color: var(--sun);
+}
+
+.sim-chip--earth {
+  border-color: var(--earth);
+  color: var(--earth);
+}
+
+.sim-chip--blocked {
+  border-color: var(--danger-text);
+  color: var(--danger-text);
+}
+
+.sim-cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin: 0 40px;
+}
+
+.sim-card {
+  padding: 14px 18px;
+  border-radius: 14px;
+  background: var(--deep-blue);
+  border: 2px solid var(--border-strong);
+}
+
+.sim-card.is-sun {
+  border-color: var(--sun);
+}
+
+.sim-card.is-earth {
+  border-color: var(--earth);
+}
+
+.sim-card.is-blocked {
+  border-color: var(--danger-text);
+}
+
+.sim-card header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sim-card__state {
+  margin-left: auto;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.sim-card__grid {
+  margin-top: 8px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.sim-card__grid > div {
+  display: flex;
+  flex-direction: column;
+  font-size: 13px;
+}
+
+.sim-card__big {
+  font-family: var(--font-heading);
+  font-weight: 900;
+  font-size: 28px;
+  line-height: 1.15;
+}
+
+.sim-card__battery {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.sim-success {
+  flex: 1 1 320px;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.sim-success__head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.sim-success__pct {
+  fill: var(--white);
+  font: 900 28px var(--font-heading);
+}
+
+.sim-success__verdict {
+  font-family: var(--font-heading);
+  font-weight: 900;
+  font-size: 24px;
+  letter-spacing: 0.05em;
+}
+
+.sim-factors {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.sim-factors li {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.sim-factor__icon {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--deep-blue);
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.sim-delta {
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px dashed var(--border-strong);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.sim-timeline {
+  flex: 999 1 560px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sim-timeline__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+}
+
+.play-btn {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: 0;
+  background: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.sim-timeline__range {
+  width: 100%;
+  min-height: 28px;
+  accent-color: var(--accent);
+}
+
+.sim-track {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sim-track > .eyebrow {
+  width: 96px;
+  flex: none;
+  font-size: 12px;
+}
+
+.sim-track__bar {
+  position: relative;
+  flex: 1;
+  display: flex;
+  height: 14px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: #1a2a55;
+}
+
+.sim-track__bar span {
+  height: 100%;
+}
+
+.sim-track__bar i {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--accent);
+}
+
+.sim-battery {
+  flex: 1;
+  height: 100px;
+  display: block;
+  border-radius: 4px;
+  background: var(--surface);
+}
+
+@media (max-width: 900px) {
+  .sim-cards {
+    grid-template-columns: 1fr;
+  }
+}

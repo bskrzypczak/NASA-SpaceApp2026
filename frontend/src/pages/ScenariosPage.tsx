@@ -7,6 +7,7 @@ import { useSelection } from '../store/selection';
 import { SITES } from '../data/sites';
 import { defaultHorizonModel, siteRef } from '../lib/requests';
 import { formatLat, formatLon } from '../lib/coords';
+import './ScenariosPage.css';
 
 const WINDOW_DAYS = 30;
 const STEP_MIN = 10;
