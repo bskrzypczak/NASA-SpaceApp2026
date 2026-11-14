@@ -80,6 +80,7 @@ Każdy błąd ma ten sam kształt:
 | Ważne | GET | `/meta/sources` | Pro → Data & validation |
 | Ważne | GET | `/validation` | Pro → Data & validation |
 | **MVP** | GET | `/layers` | Site (katalog warstw mapy) |
+| **MVP** | GET | `/layers/{id}/grid` | Site (siatka nachylenia / PSR) |
 | Dodatkowe (planowane) | GET | `/layers/{layer}/tiles/{z}/{x}/{y}.png` | Site (kafelki warstw mapy) |
 | Dodatkowe | GET | `/route` | Popup (trasa Ziemia → Księżyc) |
 | Dodatkowe | GET | `/simulations/{id}/brief.pdf` | Mission brief |
@@ -463,6 +464,41 @@ Katalog zwraca cztery warstwy obsługiwane przez frontend. `tileUrl` pozostaje `
 }
 ```
 
+### 4.11.1 `GET /layers/{id}/grid` — wartości warstwy na siatce
+
+Query takie same jak w `/terrain/heightmap`: `lat`, `lon`, `sizeKm` (`5`,
+`10`, `20` lub `40`), `res` (`16`–`512`, domyślnie `256`). Przy tych samych
+parametrach `values[row][col]` odpowiadają piksel w piksel `heightsM[row][col]`:
+wiersz 0 to północ, kolumna 0 to zachód. `null` oznacza brak danych;
+`min` i `max` są liczone tylko z wartości nie-null.
+
+```json
+{
+  "layerId": "slope",
+  "lat": -89.45,
+  "lon": -137.3,
+  "sizeKm": 20,
+  "res": 256,
+  "kind": "continuous",
+  "unit": "deg",
+  "min": 0.0,
+  "max": 34.2,
+  "values": [[3.1, 2.8, null, "..."], "..."],
+  "northUp": true,
+  "source": "LOLA DEM 100 m/px",
+  "version": "LRO_LOLA_DEM_SPole45_100mp_v04"
+}
+```
+
+`slope` jest liczony metodą Horna z 3×3 próbek z tej samej heightmapy; brzeg
+siatki i okna zawierające NoData zwracają `null`. Slope korzysta z cache'u
+heightmapy. `psr` zwraca maskę `1` (w PSR), `0` (poza PSR) lub `null` (poza
+pokryciem / NoData), `unit: null`, źródło NASA GSFC PGDA i wersję rastra
+`LPSR_80S_20MPP_ADJ`; wynik siatki PSR jest cache'owany przez 24 h.
+Warstwy `illumination` i `earth-visibility` na razie odpowiadają błędem
+`422 LAYER_GRID_UNAVAILABLE`. Nieznany identyfikator zwraca
+`404 LAYER_NOT_FOUND`; niepoprawne parametry — `422 VALIDATION_ERROR`.
+
 Planowane kafelki w projekcji biegunowej (jak Moon Trek WMTS) można wygenerować z map PGDA / LOLA i serwować statycznie (CDN). Endpoint `/layers/{layer}/tiles/{z}/{x}/{y}.png` nie jest obecnie zaimplementowany.
 
 ### 4.12 `GET /route` — trasa Ziemia → Księżyc (popup)
@@ -633,6 +669,7 @@ Domyślne wagi: `wP = 0.5`, `wC = 0.3`, `wN = 0.2`. **Front i backend muszą lic
 | Próbki DEM i efemerydy | SQLite (`backend/.cache/`) | współrzędne, wersja DEM i parametry zapytania |
 | Profile horyzontu | SQLite (`backend/.cache/`) | `lat, lon, heightM, binDeg, demVersion` |
 | Heightmapy | SQLite (`backend/.cache/`), maks. 4 | `lat, lon, sizeKm, res, demVersion` |
+| Siatki PSR | SQLite (`backend/.cache/`) | `lat, lon, sizeKm, res, version` |
 | Symulacje | pamięć procesu (maks. 256) i SQLite (maks. 256) | hash znormalizowanego requestu → to samo `id`; TTL SQLite 24 h |
 | Kalendarz katalogu | JSON z wyprzedzeniem | `siteId, rok, preset` |
 
@@ -686,8 +723,9 @@ Obecna implementacja udostępnia `GET /health`, `GET /sites`,
 `GET /sites/{id}`, `GET /terrain/point`, `GET /terrain/heightmap`,
 `GET /horizon`, `GET /ephemeris`, `POST /simulations`,
 `GET /simulations/{id}`, `POST /calendar`, `POST /scenarios/compare`,
-`GET /layers` i `GET /meta/sources`. Katalog ma te same 19 wpisów co
-frontend; jego współrzędne pozostają przybliżone (`coordsVerified: false`).
+`GET /layers`, `GET /layers/{id}/grid` i `GET /meta/sources`. Katalog ma te
+same 19 wpisów co frontend; jego współrzędne pozostają przybliżone
+(`coordsVerified: false`).
 
 `/terrain/point` pobiera wartości z NASA Moon Trek ImageServer: DEM biegunowe
 LOLA ma rozdzielczość 100 m/px, a globalny DEM 256 px/stopień. Nie jest to

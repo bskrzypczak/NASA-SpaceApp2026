@@ -13,6 +13,11 @@ from app.api_utils import API_PREFIX, normalize_longitude
 from app.calendar_routes import router as calendar_router
 from app.heightmap_source import fetch_lunar_heightmap
 from app.horizon_source import fetch_horizon
+from app.layer_grid_source import (
+    LayerGridDataError,
+    build_slope_grid,
+    fetch_psr_grid,
+)
 from app.simulation_routes import router as simulation_router
 from app.sites import FEATURED_IDS, SITE_BY_ID, SITES
 from app.sources import fetch_ephemeris, fetch_lunar_elevation
@@ -68,15 +73,21 @@ app.add_middleware(
 
 @app.exception_handler(RequestValidationError)
 async def validation_error_handler(
-    _request: Request, exc: RequestValidationError
+    request: Request, exc: RequestValidationError
 ) -> JSONResponse:
     errors = exc.errors()
     first_error = errors[0] if errors else {}
     location = first_error.get("loc", ())
     field = str(location[-1]) if location else None
     message = first_error.get("msg", "Invalid request.")
+    status_code = (
+        422
+        if request.url.path.startswith(f"{API_PREFIX}/layers/")
+        and request.url.path.endswith("/grid")
+        else 400
+    )
     return JSONResponse(
-        status_code=400,
+        status_code=status_code,
         content={
             "error": {
                 "code": "VALIDATION_ERROR",
@@ -389,6 +400,74 @@ app.include_router(calendar_router)
 @app.get(f"{API_PREFIX}/layers")
 async def get_layers() -> dict:
     return {"layers": LAYER_CATALOG}
+
+
+@app.get(f"{API_PREFIX}/layers/{{layer_id}}/grid")
+async def get_layer_grid(
+    layer_id: str,
+    lat: float = Query(..., ge=-90, le=90),
+    lon: float = Query(..., ge=-180, le=360),
+    size_km: float = Query(default=20, alias="sizeKm"),
+    res: int = Query(default=256),
+) -> dict:
+    layer_ids = {layer["id"] for layer in LAYER_CATALOG}
+    if layer_id not in layer_ids:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "code": "LAYER_NOT_FOUND",
+                "message": "Unknown layer id.",
+                "field": "id",
+            },
+        )
+    if layer_id not in {"slope", "psr"}:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "LAYER_GRID_UNAVAILABLE",
+                "message": "This layer does not have a grid yet.",
+                "field": "id",
+            },
+        )
+    if not math.isfinite(size_km) or size_km not in {5, 10, 20, 40}:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "VALIDATION_ERROR",
+                "message": "sizeKm must be 5, 10, 20, or 40.",
+                "field": "sizeKm",
+            },
+        )
+    if not 16 <= res <= 512:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "VALIDATION_ERROR",
+                "message": "res must be between 16 and 512.",
+                "field": "res",
+            },
+        )
+
+    normalized_lon = normalize_longitude(lon)
+    if layer_id == "slope":
+        heightmap = await fetch_lunar_heightmap(
+            lat,
+            normalized_lon,
+            size_km,
+            res,
+        )
+        try:
+            return build_slope_grid(heightmap)
+        except LayerGridDataError as exc:
+            raise HTTPException(
+                status_code=502,
+                detail={
+                    "code": "UPSTREAM_ERROR",
+                    "message": "The LOLA DEM grid could not be processed.",
+                    "field": None,
+                },
+            ) from exc
+    return await fetch_psr_grid(lat, normalized_lon, size_km, res)
 
 
 @app.get(f"{API_PREFIX}/meta/sources")

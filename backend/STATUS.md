@@ -59,11 +59,16 @@ Aktualizacja: 2026-11-14
 - Dodano skrypt `python -m scripts.warmup`, który przygotowuje DEM, horyzont i
   domyślne symulacje dla czterech pierwszych wyróżnionych miejsc frontendu.
   Uruchomienie produkcyjne skryptu wymaga dostępu do źródeł NASA/JPL.
+- Dodano `GET /api/v1/layers/{id}/grid` dla `slope` i `psr`. Siatka nachylenia
+  używa metody Horna na tych samych próbkach heightmapy; PSR jest próbkowane z
+  rastra PGDA dla środków dokładnie tych samych komórek. Heightmapa używana
+  przez slope i siatka PSR są cache'owane na dysku; pozostałe dwie warstwy
+  zwracają `LAYER_GRID_UNAVAILABLE`.
 - Rasterio 1.4.4 działa w `C:\Users\joasi\Documents\PP\SEM_2\.venv`.
   Podłączono odczyt wartości `inPermanentShadow` z rastra PSR PGDA (20 m/px,
   80–90°S); piksele NoData i punkty poza zasięgiem pozostają `null`. Live
   sprawdzono wynik `true` dla `(-88, 0)` i `false` dla `(-89.45, -137.3)`.
-- Testy backendu po wdrożeniu trwałego cache: `62 passed`, 1 ostrzeżenie
+- Testy backendu po dodaniu endpointu siatki: `72 passed`, 1 ostrzeżenie
   deprecacyjne Starlette/httpx.
 - Live dla `(-89.45, -137.3)`: DEM zwrócił wysokość `1956 m`, próbki N/S/E/W
   `1954`, `1955.5`, `1953` i `1952.5 m`, a nachylenie `0.453°`.
@@ -74,6 +79,11 @@ Aktualizacja: 2026-11-14
 - Trwały cache zweryfikowano testami: po wyczyszczeniu cache RAM wpis źródłowy
   został odczytany z SQLite, a `GET /simulations/{id}` odtworzył wynik po
   opróżnieniu słownika procesu.
+- Live `/layers/slope/grid` dla `(-89.45, -137.3)`, `sizeKm=5`, `res=16`:
+  HTTP 200, siatka 16×16, 196 komórek z obliczonym nachyleniem, zakres
+  `0.749°`–`19.417°`, DEM `LRO_LOLA_DEM_SPole45_100mp_v04`.
+- Live `/layers/psr/grid` dla tego samego punktu i rozmiaru: 256 komórek
+  pokrytych rastrem PGDA, wartości 0–1, w tym 4 komórki PSR.
 - Live `/terrain/heightmap`: HTTP 200 dla DEM południowego, północnego i
   globalnego; domyślna siatka południowa ma 256×256 próbek. JSON i PNG16
   zweryfikowano osobno. Na punkcie `(-89.45, -137.3)` interpolowane
@@ -91,8 +101,8 @@ Aktualizacja: 2026-11-14
 
 ## Do zrobienia
 
-- Następny: `GET /layers/{id}/grid` — najpierw nachylenie liczone z heightmapy
-  i PSR z istniejącego rastra; później oświetlenie i widoczność Ziemi z PGDA.
+- Uzupełnić `GET /layers/{id}/grid` o `illumination` i `earth-visibility`
+  z danych PGDA.
 - Następnie `POST /nearby`: mapa wrażliwości małych zmian położenia; ograniczyć
   liczbę komórek lub uruchamiać obliczenia asynchronicznie.
 - Następnie `/validation`: porównać średnie oświetlenie z obliczeń backendu,
