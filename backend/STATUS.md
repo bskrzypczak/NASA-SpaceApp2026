@@ -7,7 +7,7 @@ Aktualizacja: 2026-11-14
 - Utworzono backend FastAPI z endpointami `/health`, `/api/v1/sites`,
   `/api/v1/sites/{id}`, `/api/v1/terrain/point`, `/api/v1/terrain/heightmap`,
   `/api/v1/horizon`, `/api/v1/ephemeris`, `/api/v1/simulations`,
-  `/api/v1/simulations/{id}` i `/api/v1/meta/sources`.
+  `/api/v1/simulations/{id}`, `/api/v1/calendar` i `/api/v1/meta/sources`.
 - Dodano katalog 19 miejsc zgodny z frontendem. Ich współrzędne są nadal
   przybliżone (`coordsVerified: false`).
 - Podłączono rzeczywiste źródła: DEM LOLA przez NASA Moon Trek oraz efemerydy
@@ -30,13 +30,17 @@ Aktualizacja: 2026-11-14
   rzeczywiste efemerydy łączone są z maską horyzontu, widocznością tarcz,
   oknami, zdarzeniami, baterią i oceną powodzenia. Obsługiwane są tryby `real`
   i `flat`; `includeTimeseries: false` ogranicza wielkość odpowiedzi.
+- Dodano `POST /api/v1/calendar`: ocena kolejnych dni lądowania tym samym
+  silnikiem co symulacje, grupowanie wyników w miesiące, dzień najlepszy,
+  godzinowe próbkowanie Horizons i porcjowanie długich zakresów do limitu
+  4320 próbek.
 - Wyniki symulacji mają deterministyczne ID i są dostępne w pamięci procesu
   (maksymalnie 256 wpisów); nie przetrwają restartu serwera.
 - Rasterio 1.4.4 działa w `C:\Users\joasi\Documents\PP\SEM_2\.venv`.
   Podłączono odczyt wartości `inPermanentShadow` z rastra PSR PGDA (20 m/px,
   80–90°S); piksele NoData i punkty poza zasięgiem pozostają `null`. Live
   sprawdzono wynik `true` dla `(-88, 0)` i `false` dla `(-89.45, -137.3)`.
-- Testy backendu: `42 passed`.
+- Testy backendu: `47 passed`.
 - Live dla `(-89.45, -137.3)`: DEM zwrócił wysokość `1956 m`, próbki N/S/E/W
   `1954`, `1955.5`, `1953` i `1952.5 m`, a nachylenie `0.453°`.
   Projekcję północną sprawdzono dodatkowo względem wartości z eksportu GeoTIFF.
@@ -49,6 +53,8 @@ Aktualizacja: 2026-11-14
   `originElevationM` wyniosło `1954.71 m`; różnica względem próbkowania
   `/terrain/point` (`1956 m`) wynika z interpolacji rastra o nominalnej
   rozdzielczości 100 m/px.
+- Live `/calendar`: JPL Horizons zwrócił HTTP 200 dla dwudniowego zakresu
+  smoke test; pełny rok i 3-częściowy podział limitu przeszły test mockowany.
 - Live test symulacji: `POST` zwrócił 201, a `GET /simulations/{id}` tę samą
   odpowiedź. Krótki test 1-dniowy z krokiem 12 h zajął około 38 s (pierwszy
   odczyt DEM); nie jest to reprezentatywny wynik naukowy dla pełnej misji.
@@ -63,7 +69,7 @@ Aktualizacja: 2026-11-14
 - Zweryfikować współrzędne katalogu miejsc.
 - Podłączyć planowany DEM PGDA 5/20 m/px; obecny profil horyzontu korzysta
   z DEM Moon Trek 100 m/px.
-- Zaimplementować pozostałe endpointy opisane w specyfikacji, m.in. kalendarz,
+- Zaimplementować pozostałe endpointy opisane w specyfikacji, m.in.
   porównanie scenariuszy i warstwy, jeśli nadal należą do zakresu.
 
 ## Ograniczenia obecnej wersji
@@ -76,5 +82,7 @@ Aktualizacja: 2026-11-14
   sekund. Cache działa w pamięci procesu.
 - Symulacje wykonują się synchronicznie; tryb z nowym profilem horyzontu może
   trwać kilkadziesiąt sekund. Zapis wyników jest tylko w pamięci procesu.
+- Kalendarz wykonuje się synchronicznie; pierwsze żądanie obejmujące rok może
+  wymagać kilku zapytań do Horizons i potrwać długo.
 - Pierwszy odczyt rastra PSR może trwać dłużej; jego GeoTIFF waży około 154 MB,
   a czas odczytu zależy od dostępności serwera PGDA.

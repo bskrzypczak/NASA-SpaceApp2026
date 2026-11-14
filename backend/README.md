@@ -348,8 +348,19 @@ Odpowiedź `200`:
 ```
 
 - Ekran miesięcy pyta o 2 miesiące, widok roku o 12 — ten sam endpoint.
-- `season`: `summer` \| `winter` \| `neutral` — do etykiet w widoku roku.
-- Ciężkie (365 symulacji). Dla miejsc z katalogu **policz z wyprzedzeniem** dla domyślnego sprzętu; dla innych parametrów — cache + async.
+- `from` i `to` są datami UTC włącznie; maksymalny zakres to 366 dni.
+  `missionDays` ma zakres 1–30 (domyślnie 14), a `landingTimeOfDay` jest
+  godziną UTC (domyślnie `06:00:00Z`).
+- Dla każdego dnia używany jest ten sam silnik oceny co `/simulations`, ale
+  efemerydy są próbkowane co 60 minut. Zakresy roczne pobierane są z Horizons
+  porcjami do 4320 próbek; źródłowy cache ogranicza powtórne pobrania.
+- `goodDays` oznacza liczbę dni z `successPct >= 80`. `best` wybiera najwyższy
+  wynik, a przy remisie wcześniejszą datę.
+- `season` jest orientacyjną etykietą miesiąca względem półkuli (grudzień–
+  luty = lato na południu, zima na północy; czerwiec–sierpień odwrotnie;
+  pozostałe miesiące i równik = `neutral`). Nie jest wyznaczana z efemeryd.
+- Endpoint działa synchronicznie. Pierwsze roczne żądanie z `real` może być
+  długie, ponieważ pobiera horyzont i kilka porcji efemeryd.
 
 ### 4.9 `POST /scenarios/compare` — porównanie obok siebie
 
