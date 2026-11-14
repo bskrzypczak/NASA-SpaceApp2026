@@ -20,6 +20,11 @@ from app.calendar import (
     build_calendar_result,
 )
 from app.simulation import SimulationRequest, build_simulation_result
+from app.scenarios import (
+    ScenarioCompareRequest,
+    choose_recommendation,
+    meets_requirements,
+)
 from app.sites import FEATURED_IDS, SITE_BY_ID, SITES
 from app.sources import (
     fetch_ephemeris,
@@ -696,6 +701,36 @@ async def get_simulation(simulation_id: str) -> dict:
     if simulation is None:
         raise HTTPException(status_code=404, detail="Unknown simulationId.")
     return simulation
+
+
+@app.post(f"{API_PREFIX}/scenarios/compare")
+async def compare_scenarios(request: ScenarioCompareRequest) -> dict:
+    simulation_requests = [
+        SimulationRequest.model_validate(scenario.model_dump(exclude={"label"}))
+        for scenario in request.scenarios
+    ]
+    simulations = await asyncio.gather(
+        *(
+            create_simulation(simulation_request)
+            for simulation_request in simulation_requests
+        )
+    )
+    results = [
+        {
+            "label": scenario.label,
+            "simulationId": simulation["id"],
+            "summary": simulation["summary"],
+            "windows": simulation["windows"],
+            "meetsRequirements": meets_requirements(
+                simulation["summary"], request.requirements
+            ),
+        }
+        for scenario, simulation in zip(request.scenarios, simulations)
+    ]
+    return {
+        "results": results,
+        "recommendation": choose_recommendation(request.scenarios, results),
+    }
 
 
 @app.post(f"{API_PREFIX}/calendar")

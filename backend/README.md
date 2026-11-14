@@ -75,7 +75,7 @@ Każdy błąd ma ten sam kształt:
 | Ważne | GET | `/horizon` | Simulation (Sky 360°, pierścień horyzontu w 3D), Pro |
 | **MVP** | GET | `/terrain/heightmap` | Site, Simulation (teren w scenie 3D) |
 | Ważne | GET | `/ephemeris` | Pro (surowe dane, eksport) |
-| Ważne | POST | `/scenarios/compare` | Scenarios |
+| **MVP** | POST | `/scenarios/compare` | Scenarios |
 | Ważne | POST | `/nearby` | Better places nearby |
 | Ważne | GET | `/meta/sources` | Pro → Data & validation |
 | Ważne | GET | `/validation` | Pro → Data & validation |
@@ -365,6 +365,8 @@ Odpowiedź `200`:
 ### 4.9 `POST /scenarios/compare` — porównanie obok siebie
 
 Request: lista 2–4 specyfikacji w formacie `/simulations` (bez `includeTimeseries`).
+Każda specyfikacja zawiera dodatkowo `label`. Domyślne wymagania to
+`minSocPct: 20` i `minEarthVisiblePct: 50`; oba progi można nadpisać.
 
 ```json
 {
@@ -390,6 +392,10 @@ Odpowiedź: `summary` + `windows` + `simulationId` dla każdego scenariusza oraz
 ```
 
 Reguła rekomendacji (prosta, wyjaśnialna): najwyższy `successPct` wśród spełniających wymagania; przy różnicy < 3 pkt wygrywa ten **bez zmiany daty**.
+Datą bazową jest data pierwszego scenariusza. Jeśli żaden scenariusz nie
+spełnia progów, `recommendation` ma wartość `null`. Wyniki `simulationId`
+zostają dostępne przez `GET /simulations/{id}`; symulacje nie zawierają
+szeregów czasowych.
 
 ### 4.10 `POST /nearby` — mapa wrażliwości
 
