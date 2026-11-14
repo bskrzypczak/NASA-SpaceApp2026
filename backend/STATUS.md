@@ -54,10 +54,11 @@ Aktualizacja: 2026-11-14
 - Dodano `POST /api/v1/scenarios/compare`: uruchamia 2–4 zapisane symulacje,
   porównuje progi zapasu energii i widoczności Ziemi oraz wybiera rekomendację
   z preferencją daty bazowej przy różnicy wyniku mniejszej niż 3 pkt.
-- Cache DEM, heightmap, horyzontu i efemeryd oraz wyniki symulacji są
-  przechowywane w SQLite (`backend/.cache/`) i przetrwają restart serwera.
-  `HORIZON_CACHE_DIR` pozwala wskazać inny katalog; cache danych źródłowych i
-  symulacji wygasa po 24 godzinach.
+- Cache próbek DEM, heightmap, profili horyzontu, efemeryd i wyników symulacji
+  jest przechowywany w SQLite (`backend/.cache/`) i przetrwa restart serwera.
+  Surowe, duże wycinki GeoTIFF Moon Trek są przechowywane osobno w
+  `backend/.cache/dem-windows/` (maksymalnie 4, TTL 24 h). `HORIZON_CACHE_DIR`
+  pozwala wskazać katalog cache.
 - Wyniki symulacji mają deterministyczne ID; zapis pamięciowy jest ograniczony
   do 256 wpisów, a zapis dyskowy jest odtwarzany przy kolejnym żądaniu.
 - Dodano skrypt `python -m scripts.warmup`, który przygotowuje DEM, horyzont i
@@ -90,7 +91,7 @@ Aktualizacja: 2026-11-14
   Podłączono odczyt wartości `inPermanentShadow` z rastra PSR PGDA (20 m/px,
   80–90°S); piksele NoData i punkty poza zasięgiem pozostają `null`. Live
   sprawdzono wynik `true` dla `(-88, 0)` i `false` dla `(-89.45, -137.3)`.
-- Pełny zestaw testów backendu: `84 passed`, 1 ostrzeżenie deprecacyjne
+- Pełny zestaw testów backendu: `91 passed`, 1 ostrzeżenie deprecacyjne
   Starlette/httpx.
 - Live dla `(-89.45, -137.3)`: DEM zwrócił wysokość `1956 m`, próbki N/S/E/W
   `1954`, `1955.5`, `1953` i `1952.5 m`, a nachylenie `0.453°`.
@@ -116,9 +117,15 @@ Aktualizacja: 2026-11-14
   komórki niebezpieczne lub bez danych. Sugestie porównują wynik, godziny
   oświetlenia, minimalny stan baterii i widoczność Ziemi; krok symulacji to
   60 minut. `grid.cellM` podaje rzeczywisty odstęp próbek po ograniczeniu
-  rozdzielczości.
+  rozdzielczości. Dla sąsiedztwa w obrębie jednej usługi pobierany jest jeden
+  wspólny wycinek DEM obejmujący promień horyzontu i obszar kandydatów; z tego
+  samego obrazu liczone są horyzonty, heightmapa i próbki punktów. Przy
+  przekroczeniu granicy usług DEM (45°N/S) pobierany jest osobny wycinek dla
+  każdej usługi. Surowe wycinki są cache'owane na dysku.
 - Testy `/nearby` pokrywają limit siatki, wykluczenie PSR, sugestie rankingu
-  i walidację strefy czasowej.
+  i walidację strefy czasowej. Wspólne pobieranie DEM dla sąsiadów sprawdzono
+  też live: jeden GeoTIFF (37 754 528 B) dostarczył 10 profili (5 punktów ×
+  2 wysokości), a następny `POST /nearby` zwrócił HTTP 200 w 7,1 s z cache.
 - Live `/terrain/heightmap`: HTTP 200 dla DEM południowego, północnego i
   globalnego; domyślna siatka południowa ma 256×256 próbek. JSON i PNG16
   zweryfikowano osobno. Na punkcie `(-89.45, -137.3)` interpolowane

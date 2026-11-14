@@ -7,7 +7,12 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.api_utils import API_PREFIX, normalize_longitude
+from app.dem_window_source import fetch_dem_window
 from app.heightmap_source import fetch_lunar_heightmap
+from app.horizon_source import (
+    HORIZON_MAX_DISTANCE_KM,
+    prepare_horizon_profiles,
+)
 from app.layer_grid_source import build_slope_grid, fetch_psr_grid
 from app.simulation import (
     SimulationHardware,
@@ -149,6 +154,11 @@ async def find_nearby(request: NearbyRequest) -> dict[str, Any]:
     ]
 
     size_km = _heightmap_size_km(request.radiusKm)
+    await fetch_dem_window(
+        center_lat,
+        center_lon,
+        required_margin_m=HORIZON_MAX_DISTANCE_KM * 1000 + radius_m,
+    )
     heightmap, psr_grid = await asyncio.gather(
         fetch_lunar_heightmap(center_lat, center_lon, size_km, 16),
         fetch_psr_grid(center_lat, center_lon, size_km, 16),
@@ -183,6 +193,14 @@ async def find_nearby(request: NearbyRequest) -> dict[str, Any]:
         candidates.append((row, col, lat, lon, distance_km))
 
     weights = _goal_weights(request.goal)
+    hardware = SimulationHardware()
+    await prepare_horizon_profiles(
+        center_lat,
+        center_lon,
+        [(candidate[2], candidate[3]) for candidate in candidates],
+        (hardware.panelHeightM, hardware.mastHeightM),
+        neighborhood_radius_m=radius_m,
+    )
 
     async def evaluate(
         lat: float, lon: float
@@ -193,7 +211,7 @@ async def find_nearby(request: NearbyRequest) -> dict[str, Any]:
             missionDays=request.missionDays,
             windowDays=request.missionDays,
             stepMin=60,
-            hardware=SimulationHardware(),
+            hardware=hardware,
             weights=weights,
             includeTimeseries=False,
         )

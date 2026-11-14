@@ -57,6 +57,10 @@ DEM_SERVICES = {
 
 _cache: dict[str, tuple[float, dict[str, Any]]] = {}
 _horizons_semaphore = asyncio.Semaphore(2)
+MOON_TREK_CONCURRENCY_LIMIT = 2
+_moon_trek_semaphore: asyncio.Semaphore | None = None
+_moon_trek_semaphore_loop: asyncio.AbstractEventLoop | None = None
+MOON_TREK_RETRIES = 2
 
 
 def _cache_get(key: str) -> dict[str, Any] | None:
@@ -120,25 +124,92 @@ def _upstream_error(
     )
 
 
-async def _get_json(
+async def _get_response(
+    client: httpx.AsyncClient,
+    url: str,
+    params: dict[str, str],
+    *,
+    semaphore: asyncio.Semaphore | None = None,
+    retries: int = 0,
+    service_name: str = "upstream data",
+) -> httpx.Response:
+    for attempt in range(retries + 1):
+        try:
+            if semaphore is None:
+                response = await client.get(url, params=params)
+            else:
+                async with semaphore:
+                    response = await client.get(url, params=params)
+            response.raise_for_status()
+            return response
+        except (httpx.RemoteProtocolError, httpx.ReadTimeout) as exc:
+            if attempt < retries:
+                await asyncio.sleep(0.25 * (2**attempt))
+                continue
+            if isinstance(exc, httpx.ReadTimeout):
+                raise _upstream_error(
+                    f"The {service_name} service timed out.",
+                    504,
+                    cause=exc,
+                ) from exc
+            raise _upstream_error(
+                f"The {service_name} service could not be reached.",
+                cause=exc,
+            ) from exc
+        except httpx.TimeoutException as exc:
+            raise _upstream_error(
+                f"The {service_name} service timed out.",
+                504,
+                cause=exc,
+            ) from exc
+        except httpx.HTTPStatusError as exc:
+            raise _upstream_error(
+                f"The {service_name} service returned HTTP {exc.response.status_code}.",
+                cause=exc,
+            ) from exc
+        except httpx.RequestError as exc:
+            raise _upstream_error(
+                f"The {service_name} service could not be reached.",
+                cause=exc,
+            ) from exc
+
+    raise RuntimeError("The upstream request retry loop ended unexpectedly.")
+
+
+async def _get_moon_trek_response(
     client: httpx.AsyncClient, url: str, params: dict[str, str]
+) -> httpx.Response:
+    global _moon_trek_semaphore, _moon_trek_semaphore_loop
+    loop = asyncio.get_running_loop()
+    if _moon_trek_semaphore_loop is not loop:
+        _moon_trek_semaphore = asyncio.Semaphore(
+            MOON_TREK_CONCURRENCY_LIMIT
+        )
+        _moon_trek_semaphore_loop = loop
+    semaphore = _moon_trek_semaphore
+    if semaphore is None:
+        raise RuntimeError("The Moon Trek request semaphore was not initialized.")
+    return await _get_response(
+        client,
+        url,
+        params,
+        semaphore=semaphore,
+        retries=MOON_TREK_RETRIES,
+        service_name="lunar DEM",
+    )
+
+
+async def _get_json(
+    client: httpx.AsyncClient,
+    url: str,
+    params: dict[str, str],
+    *,
+    moon_trek: bool = False,
 ) -> dict[str, Any]:
-    try:
-        response = await client.get(url, params=params)
-        response.raise_for_status()
-    except httpx.TimeoutException as exc:
-        raise _upstream_error(
-            "The upstream data service timed out.", 504, cause=exc
-        ) from exc
-    except httpx.HTTPStatusError as exc:
-        raise _upstream_error(
-            f"The upstream data service returned HTTP {exc.response.status_code}.",
-            cause=exc,
-        ) from exc
-    except httpx.RequestError as exc:
-        raise _upstream_error(
-            "The upstream data service could not be reached.", cause=exc
-        ) from exc
+    if moon_trek:
+        response = await _get_moon_trek_response(client, url, params)
+    else:
+        response = await _get_response(client, url, params)
 
     try:
         payload = response.json()
@@ -214,12 +285,57 @@ async def _fetch_dem_sample(
     }
     if service["spatialReference"] is not None:
         params["sr"] = service["spatialReference"]
-    payload = await _get_json(client, service["url"], params)
+    payload = await _get_json(
+        client, service["url"], params, moon_trek=True
+    )
     try:
         value = float(payload.get("value"))
     except (TypeError, ValueError):
         return None
     return value if math.isfinite(value) else None
+
+
+def _sample_dem_window(
+    content: bytes,
+    service: dict[str, Any],
+    sample_points: dict[str, tuple[float, float]],
+) -> dict[str, float | None]:
+    try:
+        import rasterio
+        from rasterio.io import MemoryFile
+    except ImportError as exc:
+        raise _upstream_error(
+            "NumPy and Rasterio are required to read the lunar DEM window.",
+            cause=exc,
+        ) from exc
+
+    try:
+        with MemoryFile(content) as memory_file:
+            with memory_file.open() as dataset:
+                dem = dataset.read(1)
+                result: dict[str, float | None] = {}
+                for name, (lat, lon) in sample_points.items():
+                    if service["projection"] == "south-polar":
+                        x, y = _south_polar_stereographic_xy(lat, lon)
+                    else:
+                        x, y = _north_polar_stereographic_xy(lat, lon)
+                    row, col = dataset.index(x, y)
+                    if not (0 <= row < dataset.height and 0 <= col < dataset.width):
+                        result[name] = None
+                        continue
+                    value = float(dem[row, col])
+                    if (
+                        not math.isfinite(value)
+                        or (dataset.nodata is not None and value == dataset.nodata)
+                    ):
+                        result[name] = None
+                    else:
+                        result[name] = value
+                return result
+    except (OSError, rasterio.errors.RasterioError) as exc:
+        raise _upstream_error(
+            "The cached lunar DEM window could not be decoded.", cause=exc
+        ) from exc
 
 
 class PermanentShadowDataError(RuntimeError):
@@ -330,17 +446,31 @@ async def fetch_lunar_elevation(lat: float, lon: float) -> dict[str, Any]:
         "east": _destination_point(lat, lon, 90, east_west_step_m),
         "west": _destination_point(lat, lon, 270, east_west_step_m),
     }
-    async with httpx.AsyncClient(timeout=12.0) as client:
-        samples, in_permanent_shadow = await asyncio.gather(
-            asyncio.gather(
-                *(
-                    _fetch_dem_sample(client, service, point_lat, point_lon)
-                    for point_lat, point_lon in sample_points.values()
-                )
+    from app.dem_window_source import find_cached_dem_window
+
+    dem_window = await find_cached_dem_window(lat, lon, service)
+    if dem_window is not None:
+        elevations, in_permanent_shadow = await asyncio.gather(
+            asyncio.to_thread(
+                _sample_dem_window,
+                dem_window.content,
+                service,
+                sample_points,
             ),
             _fetch_permanent_shadow(lat, lon),
         )
-    elevations = dict(zip(sample_points, samples))
+    else:
+        async with httpx.AsyncClient(timeout=12.0) as client:
+            samples, in_permanent_shadow = await asyncio.gather(
+                asyncio.gather(
+                    *(
+                        _fetch_dem_sample(client, service, point_lat, point_lon)
+                        for point_lat, point_lon in sample_points.values()
+                    )
+                ),
+                _fetch_permanent_shadow(lat, lon),
+            )
+        elevations = dict(zip(sample_points, samples))
     elevation_m = elevations["center"]
     slope_samples = [elevations[name] for name in ("north", "south", "east", "west")]
     slope_deg = None

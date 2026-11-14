@@ -14,15 +14,16 @@ from app.heightmap_source import (
     _heightmap_from_dem,
 )
 from app.horizon_source import (
-    _horizon_export_params,
     _horizon_profile_from_dem,
     fetch_horizon,
 )
+from app.heightmap_source import fetch_lunar_heightmap
 from app.sources import (
     DEM_SERVICES,
     PermanentShadowDataError,
     _fetch_dem_sample,
     _fetch_permanent_shadow,
+    _get_moon_trek_response,
     _get_json,
     _north_polar_stereographic_xy,
     _parse_horizons_response,
@@ -60,6 +61,63 @@ def test_upstream_request_failure_logs_original_exception(caplog):
     assert log_record.exc_info[1] is failure
 
 
+@pytest.mark.parametrize(
+    "failure_type", [httpx.RemoteProtocolError, httpx.ReadTimeout]
+)
+def test_moon_trek_retries_transient_connection_failures(failure_type):
+    attempts = 0
+
+    async def handle_request(request):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise failure_type("connection interrupted", request=request)
+        return httpx.Response(200, json={"ok": True})
+
+    async def fetch():
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handle_request)
+        ) as client:
+            return await _get_moon_trek_response(
+                client, "https://example.test/data", {}
+            )
+
+    response = asyncio.run(fetch())
+
+    assert response.json() == {"ok": True}
+    assert attempts == 2
+
+
+def test_moon_trek_limits_concurrent_requests_to_two():
+    active_requests = 0
+    max_active_requests = 0
+
+    async def handle_request(_request):
+        nonlocal active_requests, max_active_requests
+        active_requests += 1
+        max_active_requests = max(max_active_requests, active_requests)
+        await asyncio.sleep(0.01)
+        active_requests -= 1
+        return httpx.Response(200, json={"ok": True})
+
+    async def fetch_all():
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handle_request)
+        ) as client:
+            await asyncio.gather(
+                *(
+                    _get_moon_trek_response(
+                        client, "https://example.test/data", {}
+                    )
+                    for _ in range(5)
+                )
+            )
+
+    asyncio.run(fetch_all())
+
+    assert max_active_requests == 2
+
+
 def test_slope_uses_central_difference_and_returns_degrees():
     slope = _slope_from_cardinal_samples(
         north_m=20,
@@ -93,7 +151,8 @@ def test_dem_samples_use_native_service_coordinates(
 ):
     observed = {}
 
-    async def fake_get_json(_client, url, params):
+    async def fake_get_json(_client, url, params, *, moon_trek=False):
+        assert moon_trek is True
         observed["url"] = url
         observed["params"] = params
         return {"value": "123.5"}
@@ -290,39 +349,31 @@ def test_fetch_horizon_selects_dem_service_and_reports_its_metadata(
     monkeypatch, lat, service_name, projection, resolution_m
 ):
     observed = {}
-    real_async_client = httpx.AsyncClient
+    async def fake_dem_window(used_lat, used_lon, used_service):
+        observed["service"] = used_service
+        return SimpleNamespace(content=b"test-window")
 
-    async def serve_image(request):
-        observed["url"] = str(request.url.copy_with(query=None))
-        observed["params"] = dict(request.url.params)
-        return httpx.Response(200, content=b"II*\x00")
-
-    def async_client(*args, **kwargs):
-        return real_async_client(
-            *args,
-            transport=httpx.MockTransport(serve_image),
-            **kwargs,
-        )
-
-    def fake_profile(_raster_bytes, _lat, _lon, _height, _bin, used_projection):
+    def fake_profiles(_raster_bytes, requests, used_projection):
         observed["projection"] = used_projection
-        return [0.0], [0.0]
+        observed["requests"] = requests
+        return [([0.0], [0.0])]
 
-    monkeypatch.setattr("app.horizon_source.httpx.AsyncClient", async_client)
     monkeypatch.setattr(
-        "app.horizon_source._horizon_profile_from_tiff", fake_profile
+        "app.dem_window_source.fetch_dem_window", fake_dem_window
     )
+    monkeypatch.setattr(
+        "app.horizon_source._horizon_profiles_from_tiff", fake_profiles
+    )
+    monkeypatch.setattr("app.horizon_source._cache_get", lambda _key: None)
+    monkeypatch.setattr("app.horizon_source._cache_set", lambda *_args, **_kwargs: None)
 
     result = asyncio.run(fetch_horizon(lat, 12.0, 2.0, 0.5))
     service = DEM_SERVICES[service_name]
-    expected_url = service["url"].rsplit("/", 1)[0] + "/exportImage"
-
-    assert observed["url"] == expected_url
+    assert observed["service"] == service
     assert observed["projection"] == projection
+    assert observed["requests"] == [(lat, 12.0, 2.0, 0.5)]
     assert result["demVersion"] == service["version"]
     assert result["demResolutionM"] == resolution_m
-    assert observed["params"]["format"] == "tiff"
-    assert observed["params"]["pixelType"] == "F32"
 
 
 def test_psr_map_values_become_booleans_and_nodata_stays_unknown(monkeypatch):
@@ -367,6 +418,89 @@ def test_terrain_result_includes_psr_value(monkeypatch):
     result = asyncio.run(fetch_lunar_elevation(-88.1, 21.3))
 
     assert result["inPermanentShadow"] is True
+
+
+def test_terrain_point_samples_cached_dem_window_without_moon_trek_calls(
+    monkeypatch,
+):
+    observed = {}
+
+    async def fake_window(lat, lon, service):
+        observed["window"] = (lat, lon, service)
+        return SimpleNamespace(content=b"cached-dem")
+
+    def fake_sample(_content, _service, sample_points):
+        observed["sample_points"] = sample_points
+        return {
+            "center": 100.0,
+            "north": 101.0,
+            "south": 99.0,
+            "east": 102.0,
+            "west": 98.0,
+        }
+
+    async def fake_shadow(_lat, _lon):
+        return False
+
+    async def unexpected_sample(*_args):
+        raise AssertionError("A cached DEM window should avoid identify calls.")
+
+    monkeypatch.setattr("app.dem_window_source.find_cached_dem_window", fake_window)
+    monkeypatch.setattr("app.sources._sample_dem_window", fake_sample)
+    monkeypatch.setattr("app.sources._fetch_permanent_shadow", fake_shadow)
+    monkeypatch.setattr("app.sources._fetch_dem_sample", unexpected_sample)
+    monkeypatch.setattr("app.sources._cache_get", lambda _key: None)
+    monkeypatch.setattr("app.sources._cache_set", lambda *_args, **_kwargs: None)
+
+    result = asyncio.run(fetch_lunar_elevation(-88.1, 21.3))
+
+    assert result["elevationM"] == 100.0
+    assert result["slopeDeg"] == pytest.approx(1.281)
+    assert result["inPermanentShadow"] is False
+    assert set(observed["sample_points"]) == {
+        "center",
+        "north",
+        "south",
+        "east",
+        "west",
+    }
+
+
+def test_heightmap_reuses_cached_dem_window(monkeypatch):
+    observed = {}
+    heightmap = {
+        "lat": -89.45,
+        "lon": -137.3,
+        "sizeKm": 10,
+        "res": 16,
+        "heightsM": [[0.0] * 16 for _ in range(16)],
+    }
+
+    async def fake_window(lat, lon, service):
+        observed["window"] = (lat, lon, service)
+        return SimpleNamespace(content=b"cached-dem")
+
+    def fake_heightmap(
+        content, lat, lon, size_km, res, service
+    ):
+        observed["heightmap"] = (content, lat, lon, size_km, res, service)
+        return heightmap
+
+    monkeypatch.setattr(
+        "app.dem_window_source.find_cached_dem_window", fake_window
+    )
+    monkeypatch.setattr(
+        "app.heightmap_source._heightmap_from_tiff", fake_heightmap
+    )
+    monkeypatch.setattr("app.heightmap_source._cache_get", lambda _key: None)
+    monkeypatch.setattr(
+        "app.heightmap_source._cache_set", lambda *_args, **_kwargs: None
+    )
+
+    result = asyncio.run(fetch_lunar_heightmap(-89.45, -137.3, 10, 16))
+
+    assert result is heightmap
+    assert observed["heightmap"][0] == b"cached-dem"
 
 
 def test_parse_horizons_csv_table_and_de441_model():

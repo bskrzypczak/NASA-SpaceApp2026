@@ -23,6 +23,8 @@ def test_nearby_evaluates_bounded_safe_grid_and_returns_ranked_suggestions(
     monkeypatch,
 ):
     evaluated = []
+    dem_windows = []
+    prepared_profiles = []
 
     async def fake_heightmap(lat, lon, size_km, res):
         assert (lat, lon, size_km, res) == (-89.45, -137.3, 10.0, 16)
@@ -40,6 +42,27 @@ def test_nearby_evaluates_bounded_safe_grid_and_returns_ranked_suggestions(
         values = [[0] * res for _ in range(res)]
         values[8][12] = 1
         return {"values": values}
+
+    async def fake_dem_window(lat, lon, *, required_margin_m):
+        dem_windows.append((lat, lon, required_margin_m))
+
+    async def fake_prepare_profiles(
+        center_lat,
+        center_lon,
+        locations,
+        heights_m,
+        *,
+        neighborhood_radius_m,
+    ):
+        prepared_profiles.append(
+            (
+                center_lat,
+                center_lon,
+                locations,
+                heights_m,
+                neighborhood_radius_m,
+            )
+        )
 
     async def fake_create_simulation(request):
         lat = request.site.lat
@@ -60,6 +83,10 @@ def test_nearby_evaluates_bounded_safe_grid_and_returns_ranked_suggestions(
         "app.nearby_routes.fetch_lunar_heightmap", fake_heightmap
     )
     monkeypatch.setattr("app.nearby_routes.fetch_psr_grid", fake_psr_grid)
+    monkeypatch.setattr("app.nearby_routes.fetch_dem_window", fake_dem_window)
+    monkeypatch.setattr(
+        "app.nearby_routes.prepare_horizon_profiles", fake_prepare_profiles
+    )
     monkeypatch.setattr(
         "app.nearby_routes.create_simulation", fake_create_simulation
     )
@@ -79,6 +106,19 @@ def test_nearby_evaluates_bounded_safe_grid_and_returns_ranked_suggestions(
     assert result["suggestions"][0]["rank"] == "A"
     assert result["suggestions"][0]["successPct"] == 80
     assert "+2.8 days of sunlight" in result["suggestions"][0]["why"]
+    assert dem_windows == [(-89.45, -137.3, 152_500)]
+    assert len(prepared_profiles) == 1
+    (
+        center_lat,
+        center_lon,
+        locations,
+        heights_m,
+        neighborhood_radius_m,
+    ) = prepared_profiles[0]
+    assert (center_lat, center_lon) == (-89.45, -137.3)
+    assert locations == [(item[0], item[1]) for item in evaluated]
+    assert heights_m == (2.0, 3.5)
+    assert neighborhood_radius_m == 2_500
 
 
 def test_nearby_requires_timezone_aware_landing_time():

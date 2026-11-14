@@ -193,8 +193,10 @@ Query:
 Używane przez widok **Sky 360°**. `features` są opcjonalne (etykiety gór na panoramie).
 Obecna implementacja zwraca `features: []` i liczy profil z DEM NASA Moon Trek
 o nominalnej rozdzielczości 100 m/px, nie z planowanego DEM PGDA 5/20 m/px.
-Pierwsze żądanie pobiera pełny obraz DEM i w weryfikacji live trwało około
-40–65 s; wynik jest cache'owany w SQLite przez 24 godziny.
+Pierwsze żądanie pobiera obraz obejmujący promień 150 km i jest cache'owane
+na dysku jako GeoTIFF; gotowy profil jest cache'owany w SQLite przez 24 godziny.
+Pobrania Moon Trek współdzielą limit dwóch równoczesnych żądań i ponawiają
+`RemoteProtocolError`/`ReadTimeout` maksymalnie dwa razy.
 
 ### 4.5 `GET /ephemeris` — surowe pozycje Słońca i Ziemi
 
@@ -447,6 +449,12 @@ Odpowiedź:
 - Endpoint działa synchronicznie i ogranicza obliczenie do siatki 3×3: środek i maksymalnie cztery punkty kardynalne są symulowane z krokiem 60 minut. Narożniki leżą poza kołowym promieniem i są wykluczone.
 - `cellM` jest przyjmowane jako żądana rozdzielczość, ale siatka jest celowo próbkowana rzadziej, aby uniknąć długiego obliczania setek symulacji. `grid.cellM` zwraca rzeczywisty odstęp próbek równy `radiusKm × 1000`.
 - `goal` zmienia wagi oceny (`balanced`: 0.5/0.3/0.2, `power`: 0.7/0.15/0.15, `comms`: 0.2/0.6/0.2). Sugestie uwzględniają wyłącznie punkty bez wykluczeń z wynikiem wyższym niż środek.
+- DEM dla środka i kandydatów jest pobierany jako jeden wspólny wycinek
+  obejmujący horyzont 150 km oraz promień sąsiedztwa. Horyzonty, heightmapa
+  i wysokość/nachylenie punktów są liczone z tego samego GeoTIFF-u, jeśli
+  pokrywa on żądany obszar; gotowe profile są zapisane przed symulacjami.
+  Gdy okolica przecina granicę usług DEM przy 45°N/S, potrzebny jest osobny
+  wycinek dla każdej z usług.
 
 ### 4.11 `GET /layers` — katalog warstw mapy
 
@@ -707,6 +715,7 @@ Domyślne wagi: `wP = 0.5`, `wC = 0.3`, `wN = 0.2`. **Front i backend muszą lic
 |---|---|---|
 | Próbki DEM i efemerydy | SQLite (`backend/.cache/`) | współrzędne, wersja DEM i parametry zapytania |
 | Profile horyzontu | SQLite (`backend/.cache/`) | `lat, lon, heightM, binDeg, demVersion` |
+| Wycinki DEM Moon Trek | pliki GeoTIFF w `backend/.cache/dem-windows/`, maks. 4 przez 24 h | wersja źródła i kafel przestrzenny ~10 km |
 | Heightmapy | SQLite (`backend/.cache/`), maks. 4 | `lat, lon, sizeKm, res, demVersion` |
 | Siatki PSR | SQLite (`backend/.cache/`) | `lat, lon, sizeKm, res, version` |
 | Symulacje | pamięć procesu (maks. 256) i SQLite (maks. 256) | hash znormalizowanego requestu → to samo `id`; TTL SQLite 24 h |

@@ -2,7 +2,6 @@ import asyncio
 import math
 from typing import Any
 
-import httpx
 from fastapi import HTTPException
 
 from app.sources import (
@@ -18,11 +17,8 @@ from app.sources import (
 
 HORIZON_CACHE_TTL = 24 * 60 * 60
 HORIZON_MAX_DISTANCE_KM = 150.0
-HORIZON_WINDOW_HALF_SIZE_M = 152_000.0
-HORIZON_WINDOW_SIZE_PX = 3041
 HORIZON_RAY_STEP_M = 100.0
 GLOBAL_DEM_PIXELS_PER_DEGREE = 256
-GLOBAL_HORIZON_MAX_IMAGE_SIZE = 4096
 
 
 class HorizonDataError(RuntimeError):
@@ -178,14 +174,47 @@ def _horizon_profile_from_dem(
     )
 
 
-def _horizon_profile_from_tiff(
-    raster_bytes: bytes,
+def _horizon_profile_from_dataset(
+    dem: Any,
+    *,
+    transform: Any,
+    nodata: float | None,
     lat: float,
     lon: float,
     height_m: float,
     bin_deg: float,
     projection: str,
 ) -> tuple[list[float], list[float]]:
+    if projection == "south-polar":
+        center_x, center_y = _south_polar_stereographic_xy(lat, lon)
+    elif projection == "north-polar":
+        center_x, center_y = _north_polar_stereographic_xy(lat, lon)
+    elif projection == "geographic":
+        center_x, center_y = lon, lat
+    else:
+        raise HorizonDataError(f"Unsupported DEM projection: {projection}.")
+    return _horizon_profile_from_dem(
+        dem,
+        left=transform.c,
+        top=transform.f,
+        pixel_width=transform.a,
+        pixel_height=-transform.e,
+        nodata=nodata,
+        center_x=center_x,
+        center_y=center_y,
+        lat=lat,
+        lon=lon,
+        height_m=height_m,
+        bin_deg=bin_deg,
+        projection=projection,
+    )
+
+
+def _horizon_profiles_from_tiff(
+    raster_bytes: bytes,
+    requests: list[tuple[float, float, float, float]],
+    projection: str,
+) -> list[tuple[list[float], list[float]]]:
     try:
         import numpy as np
         import rasterio
@@ -195,82 +224,25 @@ def _horizon_profile_from_tiff(
             "NumPy and Rasterio are required to calculate the horizon."
         ) from exc
 
-    if projection == "south-polar":
-        center_x, center_y = _south_polar_stereographic_xy(lat, lon)
-    elif projection == "north-polar":
-        center_x, center_y = _north_polar_stereographic_xy(lat, lon)
-    elif projection == "geographic":
-        center_x, center_y = lon, lat
-    else:
-        raise HorizonDataError(f"Unsupported DEM projection: {projection}.")
     try:
         with MemoryFile(raster_bytes) as memory_file:
             with memory_file.open() as dataset:
-                transform = dataset.transform
-                return _horizon_profile_from_dem(
-                    np.asarray(dataset.read(1)),
-                    left=transform.c,
-                    top=transform.f,
-                    pixel_width=transform.a,
-                    pixel_height=-transform.e,
-                    nodata=dataset.nodata,
-                    center_x=center_x,
-                    center_y=center_y,
-                    lat=lat,
-                    lon=lon,
-                    height_m=height_m,
-                    bin_deg=bin_deg,
-                    projection=projection,
-                )
+                dem = np.asarray(dataset.read(1))
+                return [
+                    _horizon_profile_from_dataset(
+                        dem,
+                        transform=dataset.transform,
+                        nodata=dataset.nodata,
+                        lat=lat,
+                        lon=lon,
+                        height_m=height_m,
+                        bin_deg=bin_deg,
+                        projection=projection,
+                    )
+                    for lat, lon, height_m, bin_deg in requests
+                ]
     except (OSError, rasterio.errors.RasterioError) as exc:
         raise HorizonDataError("The DEM export could not be decoded.") from exc
-
-
-def _horizon_export_params(
-    lat: float, lon: float, service: dict[str, Any]
-) -> dict[str, str]:
-    projection = service["projection"]
-    if projection == "geographic":
-        latitude_radius_deg = math.degrees(
-            HORIZON_MAX_DISTANCE_KM * 1000 / MOON_RADIUS_M
-        )
-        longitude_radius_deg = latitude_radius_deg / max(
-            abs(math.cos(math.radians(lat))), 1e-6
-        )
-        padding_deg = 2 / GLOBAL_DEM_PIXELS_PER_DEGREE
-        left = lon - longitude_radius_deg - padding_deg
-        right = lon + longitude_radius_deg + padding_deg
-        bottom = lat - latitude_radius_deg - padding_deg
-        top = lat + latitude_radius_deg + padding_deg
-        width = min(
-            GLOBAL_HORIZON_MAX_IMAGE_SIZE,
-            math.ceil((right - left) * GLOBAL_DEM_PIXELS_PER_DEGREE),
-        )
-        height = min(
-            GLOBAL_HORIZON_MAX_IMAGE_SIZE,
-            math.ceil((top - bottom) * GLOBAL_DEM_PIXELS_PER_DEGREE),
-        )
-    else:
-        if projection == "south-polar":
-            center_x, center_y = _south_polar_stereographic_xy(lat, lon)
-        elif projection == "north-polar":
-            center_x, center_y = _north_polar_stereographic_xy(lat, lon)
-        else:
-            raise HorizonDataError(f"Unsupported DEM projection: {projection}.")
-        half_size = HORIZON_WINDOW_HALF_SIZE_M
-        left = center_x - half_size
-        right = center_x + half_size
-        bottom = center_y - half_size
-        top = center_y + half_size
-        width = height = HORIZON_WINDOW_SIZE_PX
-
-    return {
-        "bbox": f"{left},{bottom},{right},{top}",
-        "size": f"{width},{height}",
-        "format": "tiff",
-        "pixelType": "F32",
-        "f": "image",
-    }
 
 
 async def fetch_horizon(
@@ -285,40 +257,17 @@ async def fetch_horizon(
     if cached is not None:
         return cached
 
-    params = _horizon_export_params(lat, lon, service)
-    export_url = service["url"].rsplit("/", 1)[0] + "/exportImage"
-    try:
-        async with httpx.AsyncClient(
-            timeout=httpx.Timeout(90.0, connect=15.0)
-        ) as client:
-            response = await client.get(export_url, params=params)
-            response.raise_for_status()
-    except httpx.TimeoutException as exc:
-        raise _upstream_error(
-            "The lunar DEM export timed out.", 504, cause=exc
-        ) from exc
-    except httpx.HTTPStatusError as exc:
-        raise _upstream_error(
-            f"The lunar DEM service returned HTTP {exc.response.status_code}.",
-            cause=exc,
-        ) from exc
-    except httpx.RequestError as exc:
-        raise _upstream_error(
-            "The lunar DEM service could not be reached.", cause=exc
-        ) from exc
+    from app.dem_window_source import fetch_dem_window
 
-    if not response.content.startswith((b"II*\x00", b"MM\x00*")):
-        raise _upstream_error("The lunar DEM service returned an invalid TIFF.")
+    dem_window = await fetch_dem_window(lat, lon, service)
     try:
-        azimuths, elevations = await asyncio.to_thread(
-            _horizon_profile_from_tiff,
-            response.content,
-            lat,
-            lon,
-            height_m,
-            bin_deg,
+        profiles = await asyncio.to_thread(
+            _horizon_profiles_from_tiff,
+            dem_window.content,
+            [(lat, lon, height_m, bin_deg)],
             service["projection"],
         )
+        azimuths, elevations = profiles[0]
     except HorizonOutOfCoverageError as exc:
         raise HTTPException(
             status_code=422,
@@ -353,3 +302,111 @@ async def fetch_horizon(
     }
     _cache_set(key, result, HORIZON_CACHE_TTL)
     return result
+
+
+async def prepare_horizon_profiles(
+    center_lat: float,
+    center_lon: float,
+    locations: list[tuple[float, float]],
+    heights_m: tuple[float, ...],
+    bin_deg: float = 0.5,
+    *,
+    neighborhood_radius_m: float = 0.0,
+) -> None:
+    missing_by_service: dict[str, list[tuple[float, float, float, float]]] = {}
+    services: dict[str, dict[str, Any]] = {}
+    for lat, lon in locations:
+        service = _dem_service_for_latitude(lat)
+        services[service["version"]] = service
+        for height_m in heights_m:
+            key = (
+                f"horizon:{service['version']}:{lat:.5f}:{lon:.5f}:"
+                f"{height_m:.2f}:{bin_deg:.1f}"
+            )
+            if _cache_get(key) is None:
+                missing_by_service.setdefault(service["version"], []).append(
+                    (lat, lon, height_m, bin_deg)
+                )
+
+    if not missing_by_service:
+        return
+
+    from app.dem_window_source import fetch_dem_window
+
+    for version, requests in missing_by_service.items():
+        service = services[version]
+        if service["version"] == _dem_service_for_latitude(center_lat)["version"]:
+            window_center = (center_lat, center_lon)
+            margin_m = neighborhood_radius_m
+        else:
+            window_center = (
+                sum(item[0] for item in requests) / len(requests),
+                sum(item[1] for item in requests) / len(requests),
+            )
+            margin_m = max(
+                math.hypot(
+                    (lat - window_center[0]) * math.pi / 180 * MOON_RADIUS_M,
+                    (lon - window_center[1])
+                    * math.cos(math.radians(window_center[0]))
+                    * math.pi
+                    / 180
+                    * MOON_RADIUS_M,
+                )
+                for lat, lon, _, _ in requests
+            )
+
+        dem_window = await fetch_dem_window(
+            *window_center,
+            service,
+            required_margin_m=HORIZON_MAX_DISTANCE_KM * 1000 + margin_m,
+        )
+        try:
+            profiles = await asyncio.to_thread(
+                _horizon_profiles_from_tiff,
+                dem_window.content,
+                requests,
+                service["projection"],
+            )
+        except HorizonOutOfCoverageError as exc:
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "code": "OUT_OF_DEM_COVERAGE",
+                    "message": str(exc),
+                    "field": "lat",
+                },
+            ) from exc
+        except HorizonDataError as exc:
+            raise _upstream_error(
+                "The lunar DEM could not be processed.", cause=exc
+            ) from exc
+
+        resolution_m = service["resolutionM"]
+        if resolution_m is None:
+            resolution_m = (
+                2 * math.pi * MOON_RADIUS_KM * 1000 / 360
+                / GLOBAL_DEM_PIXELS_PER_DEGREE
+            )
+        for (lat, lon, height_m, profile_bin), (azimuths, elevations) in zip(
+            requests, profiles
+        ):
+            key = (
+                f"horizon:{version}:{lat:.5f}:{lon:.5f}:"
+                f"{height_m:.2f}:{profile_bin:.1f}"
+            )
+            _cache_set(
+                key,
+                {
+                    "lat": lat,
+                    "lon": lon,
+                    "heightM": height_m,
+                    "binDeg": profile_bin,
+                    "maxDistanceKm": HORIZON_MAX_DISTANCE_KM,
+                    "azimuthDeg": azimuths,
+                    "elevationDeg": elevations,
+                    "features": [],
+                    "demVersion": version,
+                    "demResolutionM": round(resolution_m, 1),
+                },
+                HORIZON_CACHE_TTL,
+            )

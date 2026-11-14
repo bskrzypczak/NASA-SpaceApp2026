@@ -10,6 +10,7 @@ from app.sources import (
     MOON_RADIUS_M,
     _cache,
     _cache_get,
+    _get_moon_trek_response,
     _cache_set,
     _dem_service_for_latitude,
     _upstream_error,
@@ -305,34 +306,29 @@ async def fetch_lunar_heightmap(
     if cached is not None:
         return cached
 
-    params = _heightmap_export_params(lat, lon, size_km, res, service)
-    export_url = service["url"].rsplit("/", 1)[0] + "/exportImage"
-    try:
+    from app.dem_window_source import find_cached_dem_window
+
+    dem_window = await find_cached_dem_window(lat, lon, service)
+    if dem_window is not None:
+        raster_bytes = dem_window.content
+    else:
+        params = _heightmap_export_params(lat, lon, size_km, res, service)
+        export_url = service["url"].rsplit("/", 1)[0] + "/exportImage"
         async with httpx.AsyncClient(
             timeout=httpx.Timeout(60.0, connect=15.0)
         ) as client:
-            response = await client.get(export_url, params=params)
-            response.raise_for_status()
-    except httpx.TimeoutException as exc:
-        raise _upstream_error(
-            "The lunar DEM export timed out.", 504, cause=exc
-        ) from exc
-    except httpx.HTTPStatusError as exc:
-        raise _upstream_error(
-            f"The lunar DEM service returned HTTP {exc.response.status_code}.",
-            cause=exc,
-        ) from exc
-    except httpx.RequestError as exc:
-        raise _upstream_error(
-            "The lunar DEM service could not be reached.", cause=exc
-        ) from exc
-
-    if not response.content.startswith((b"II*\x00", b"MM\x00*")):
-        raise _upstream_error("The lunar DEM service returned an invalid TIFF.")
+            response = await _get_moon_trek_response(
+                client, export_url, params
+            )
+        if not response.content.startswith((b"II*\x00", b"MM\x00*")):
+            raise _upstream_error(
+                "The lunar DEM service returned an invalid TIFF."
+            )
+        raster_bytes = response.content
     try:
         result = await asyncio.to_thread(
             _heightmap_from_tiff,
-            response.content,
+            raster_bytes,
             lat,
             lon,
             size_km,
