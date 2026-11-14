@@ -75,6 +75,19 @@ https://science.nasa.gov/earth/earth-observatory/blue-marble-next-generation/top
 Zapisz jako `public/textures/earth_color.jpg`. Bez pliku Ziemia jest jednolicie niebieska.
 Credit: „NASA's Earth Observatory”.
 
+## Ekran 5 · Simulation (Basic)
+
+Trasy: `/simulation/new` (uruchamia `POST /simulations` z ustawień z ekranów 1–4) → `/simulation/:id`.
+
+- **Ładowanie:** pierwsza symulacja dla nowego miejsca trwa na backendzie ~40 s (DEM). Pokazujemy kroki i czas. Ponowne wejście korzysta z cache w przeglądarce.
+- **Scena 3D:** lądownik, bliski teren i daleka sylwetka z `GET /horizon`, Słońce (kierunek światła) i Ziemia z `timeseries` (az/el), linie widoczności w kolorze werdyktu backendu (żółta / niebieska / czerwona przerywana). Skala pionowa ×10, stosowana tak samo do terenu i ciał (`tan el' = 10·tan el`). Kamery: Orbit / Lander view (rozglądanie się z masztu) / Top-down.
+- **Sky 360°:** panorama w prawdziwej skali — oś X azymut, oś Y elewacja, szara maska horyzontu, przerywane tory Słońca i Ziemi.
+- **Karty:** elewacja Słońca i Ziemi + zapas nad terenem, odliczanie do zachodu / Earthset (z `events`), bateria z rezerwą.
+- **Ocena:** procent, werdykt, 3 czynniki z punktami, „Terrain costs N points” (`flatHorizonSuccessPct`). Przełącznik **Real terrain ↔ Flat horizon** dociąga drugą symulację z `horizonModel: "flat"`.
+- **Oś czasu:** play (1 h/s, 6 h/s, 1 d/s), suwak, pasy Sunlight / Earth link / Both z `windows`, wykres baterii z linią rezerwy i końcem misji.
+- Miejsca na północ od 80° S: backend nie ma tam DEM → wysyłamy `horizonModel: "flat"` automatycznie.
+- **Tryb mock:** `src/lib/simModel.ts` to port 1:1 wzorów z `backend/app/simulation.py` (sprawdzony — te same wyniki na tych samych danych wejściowych).
+
 ## Backend i tryby API
 
 Skopiuj `.env.example` do `.env.local`:
