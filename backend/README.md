@@ -192,7 +192,7 @@ Używane przez widok **Sky 360°**. `features` są opcjonalne (etykiety gór na 
 Obecna implementacja zwraca `features: []` i liczy profil z DEM NASA Moon Trek
 o nominalnej rozdzielczości 100 m/px, nie z planowanego DEM PGDA 5/20 m/px.
 Pierwsze żądanie pobiera pełny obraz DEM i w weryfikacji live trwało około
-40–65 s; wynik jest cache'owany w pamięci procesu przez 24 godziny.
+40–65 s; wynik jest cache'owany w SQLite przez 24 godziny.
 
 ### 4.5 `GET /ephemeris` — surowe pozycje Słońca i Ziemi
 
@@ -313,11 +313,16 @@ Co z tego bierze frontend:
 | Scena 3D | `timeseries.sun*/earth*` (kierunek światła i pozycja Ziemi) |
 | Pro | wszystko + eksport |
 
-Endpoint działa synchronicznie. Przy pierwszym żądaniu z `"real"` pobranie DEM horyzontu może zająć kilkadziesiąt sekund; odpowiedzi efemeryd i profili horyzontu są cache'owane przez źródłowe endpointy.
+Endpoint działa synchronicznie. Przy pierwszym żądaniu z `"real"` pobranie DEM
+horyzontu może zająć kilkadziesiąt sekund; efemerydy i profile horyzontu są
+cache'owane w SQLite przez źródłowe endpointy.
 
 ### 4.7 `GET /simulations/{id}` — zapisana symulacja
 
-Ta sama odpowiedź co `POST /simulations`. Służy do linku do udostępnienia i do Mission brief. Symulacje są **niezmienne** — inne parametry = nowe `id`. W MVP wyniki są przechowywane w pamięci procesu (maksymalnie 256); restart serwera usuwa zapisane wyniki i linki przestają działać.
+Ta sama odpowiedź co `POST /simulations`. Służy do linku do udostępnienia i do
+Mission brief. Symulacje są **niezmienne** — inne parametry = nowe `id`.
+Wyniki są przechowywane w pamięci procesu (maksymalnie 256) oraz w SQLite
+(maksymalnie 256, TTL 24 h), więc restart serwera nie usuwa ich od razu.
 
 ### 4.8 `POST /calendar` — ocena dla każdego dnia lądowania
 
@@ -532,7 +537,7 @@ Query: `lat`, `lon`, `sizeKm` (domyślnie `20`), `res` (siatka, domyślnie `256`
 `512`. Dane pochodzą z DEM LOLA NASA Moon Trek: nominalnie 100 m/px w
 polarnych usługach DEM, a globalnie z produktu 256 ppd. Gęstsza siatka wyjściowa
 jest interpolowana i nie zwiększa rozdzielczości źródła. Wyniki są cache'owane
-w pamięci procesu (maksymalnie 4 heightmapy przez 24 h).
+w SQLite (maksymalnie 4 heightmapy przez 24 h).
 
 ```json
 {
@@ -625,10 +630,10 @@ Domyślne wagi: `wP = 0.5`, `wC = 0.3`, `wN = 0.2`. **Front i backend muszą lic
 
 | Co | Gdzie | Klucz |
 |---|---|---|
-| Efemerydy | dysk / SQLite | `body, lat, lon, start, end, step` |
-| Maski horyzontu | pliki `.npy` / JSON | `lat, lon, heightM, binDeg, demVersion` |
-| Heightmapy | pliki PNG16 | `lat, lon, sizeKm, res, demVersion` |
-| Symulacje | pamięć procesu, maks. 256 | hash znormalizowanego requestu → to samo `id`; restart usuwa wyniki |
+| Próbki DEM i efemerydy | SQLite (`backend/.cache/`) | współrzędne, wersja DEM i parametry zapytania |
+| Profile horyzontu | SQLite (`backend/.cache/`) | `lat, lon, heightM, binDeg, demVersion` |
+| Heightmapy | SQLite (`backend/.cache/`), maks. 4 | `lat, lon, sizeKm, res, demVersion` |
+| Symulacje | pamięć procesu (maks. 256) i SQLite (maks. 256) | hash znormalizowanego requestu → to samo `id`; TTL SQLite 24 h |
 | Kalendarz katalogu | JSON z wyprzedzeniem | `siteId, rok, preset` |
 
 - Odpowiedzi GET z `ETag` + `Cache-Control: public, max-age=86400` (dane się nie zmieniają).
@@ -661,10 +666,28 @@ API działa pod `http://localhost:8000/api/v1`, a dokumentacja OpenAPI pod
 `FRONTEND_ORIGINS` (lista originów rozdzielona przecinkami).
 Testy uruchom poleceniem `python -m pytest` w katalogu `backend/`.
 
+Cache DEM, horyzontu, efemeryd i wyników symulacji jest przechowywany w SQLite
+w `backend/.cache/` i przetrwa restart procesu. Lokalizację można zmienić przez
+`HORIZON_CACHE_DIR`. Dane źródłowe i symulacje wygasają po 24 godzinach.
+Przed demo uruchom w katalogu `backend/`:
+
+```powershell
+python -m scripts.warmup
+```
+
+Skrypt przygotowuje cztery pierwsze wyróżnione miejsca frontendu dla jego
+domyślnej daty symulacji. Miejsca i czas można wskazać jawnie:
+
+```powershell
+python -m scripts.warmup --site connecting-ridge --site mons-mouton --landing-time 2027-03-14T06:00:00Z
+```
+
 Obecna implementacja udostępnia `GET /health`, `GET /sites`,
-`GET /sites/{id}`, `GET /terrain/point`, `GET /horizon`, `GET /ephemeris`,
-`POST /simulations`, `GET /simulations/{id}` i `GET /meta/sources`. Katalog ma te same 19 wpisów co frontend; jego
-współrzędne pozostają przybliżone (`coordsVerified: false`).
+`GET /sites/{id}`, `GET /terrain/point`, `GET /terrain/heightmap`,
+`GET /horizon`, `GET /ephemeris`, `POST /simulations`,
+`GET /simulations/{id}`, `POST /calendar`, `POST /scenarios/compare`,
+`GET /layers` i `GET /meta/sources`. Katalog ma te same 19 wpisów co
+frontend; jego współrzędne pozostają przybliżone (`coordsVerified: false`).
 
 `/terrain/point` pobiera wartości z NASA Moon Trek ImageServer: DEM biegunowe
 LOLA ma rozdzielczość 100 m/px, a globalny DEM 256 px/stopień. Nie jest to
@@ -687,12 +710,12 @@ korzystają z cache'u.
 `POST /simulations` łączy efemerydy JPL Horizons z maskami terenu, liczy
 widoczność tarczy Słońca i Ziemi, okna, baterię oraz ocenę powodzenia według
 heurystyki z §5. Wyniki można pobrać przez `GET /simulations/{id}` do czasu
-restartu procesu lub usunięcia wpisu z limitowanego cache'u.
+wygaśnięcia cache'u SQLite (24 h) lub usunięcia wpisu z limitowanego cache'u.
 
 `/ephemeris` odpytuje JPL Horizons dla obserwatora na powierzchni Księżyca
 (body 301), z modelem airless i DE441. Zakres musi mieć strefę czasową, być
 podzielny przez `stepMin` i nie przekraczać 4320 próbek. Odpowiedzi są cache'owane
-w pamięci procesu przez 24 godziny. Błędy i timeouty źródeł są zwracane jawnie.
+w SQLite przez 24 godziny. Błędy i timeouty źródeł są zwracane jawnie.
 Pozostałe endpointy specyfikacji wymagają dalszej implementacji oraz danych wejściowych.
 
 Sprawdzenie live wykonane 2026-11-14 dla `lat=-89.45`, `lon=-137.3`:
@@ -733,3 +756,43 @@ niezależnych punktach kontrolnych.
 | 8 · Compare dates | `POST /calendar` |
 | 9 · Scenarios | `POST /scenarios/compare` |
 | 10 · Mission brief | `GET /simulations/{id}` (+ opcjonalnie `brief.pdf`) |
+
+## 9. Uruchomienie serwera
+
+Wszystkie polecenia wykonuj w PowerShell z katalogu `backend/`.
+
+### Pierwsze uruchomienie
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+```
+
+Jeśli PowerShell blokuje aktywację środowiska, ustaw politykę tylko dla bieżącego
+procesu: `Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned`.
+
+### Development
+
+```powershell
+python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+`--reload` automatycznie restartuje serwer po zmianach kodu. API działa pod
+`http://127.0.0.1:8000/api/v1`, health check pod
+`http://127.0.0.1:8000/api/v1/health`, a Swagger pod `http://127.0.0.1:8000/docs`.
+
+### Demo
+
+Przed prezentacją rozgrzej cache i uruchom serwer bez `--reload`:
+
+```powershell
+python -m scripts.warmup
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+
+Warm-up łączy się z NASA/JPL i może potrwać kilka minut. Nie wymaga
+uruchomionego serwera. Cache jest zapisywany domyślnie w `backend/.cache/`;
+jeśli ustawiasz `HORIZON_CACHE_DIR`, użyj tej samej wartości podczas warm-upu
+i uruchamiania serwera. Katalog musi być zapisywalny i nie może być usuwany,
+jeśli cache ma przetrwać restart.

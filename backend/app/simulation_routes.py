@@ -9,6 +9,8 @@ from fastapi import APIRouter, HTTPException
 
 from app.api_utils import API_PREFIX, normalize_longitude
 from app.horizon_source import fetch_horizon
+from app.persistent_cache import get as get_persisted_cache
+from app.persistent_cache import set as set_persisted_cache
 from app.scenarios import (
     ScenarioCompareRequest,
     choose_recommendation,
@@ -21,7 +23,17 @@ from app.sources import fetch_ephemeris, fetch_lunar_elevation
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix=API_PREFIX)
 MAX_SIMULATIONS = 256
+SIMULATION_CACHE_TTL = 24 * 60 * 60
 SIMULATIONS: dict[str, dict] = {}
+
+
+def _remember_simulation(simulation_id: str, simulation: dict) -> None:
+    if (
+        simulation_id not in SIMULATIONS
+        and len(SIMULATIONS) >= MAX_SIMULATIONS
+    ):
+        SIMULATIONS.pop(next(iter(SIMULATIONS)))
+    SIMULATIONS[simulation_id] = simulation
 
 
 @router.post("/simulations", status_code=201)
@@ -180,6 +192,11 @@ async def create_simulation(request: SimulationRequest) -> dict:
     ).hexdigest()
     simulation_id = f"sim_{request_hash[:12]}"
     existing = SIMULATIONS.get(simulation_id)
+    if existing is None:
+        persisted_entry = get_persisted_cache(f"simulation:{simulation_id}")
+        if persisted_entry is not None:
+            existing, _ = persisted_entry
+            _remember_simulation(simulation_id, existing)
     if existing is not None:
         return existing
 
@@ -242,15 +259,24 @@ async def create_simulation(request: SimulationRequest) -> dict:
             },
         ) from exc
 
-    if len(SIMULATIONS) >= MAX_SIMULATIONS:
-        SIMULATIONS.pop(next(iter(SIMULATIONS)))
-    SIMULATIONS[simulation_id] = result
+    _remember_simulation(simulation_id, result)
+    set_persisted_cache(
+        f"simulation:{simulation_id}",
+        result,
+        SIMULATION_CACHE_TTL,
+        prefix_limit=MAX_SIMULATIONS,
+    )
     return result
 
 
 @router.get("/simulations/{simulation_id}")
 async def get_simulation(simulation_id: str) -> dict:
     simulation = SIMULATIONS.get(simulation_id)
+    if simulation is None:
+        persisted_entry = get_persisted_cache(f"simulation:{simulation_id}")
+        if persisted_entry is not None:
+            simulation, _ = persisted_entry
+            _remember_simulation(simulation_id, simulation)
     if simulation is None:
         raise HTTPException(status_code=404, detail="Unknown simulationId.")
     return simulation

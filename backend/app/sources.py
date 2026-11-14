@@ -12,6 +12,8 @@ from typing import Any
 import httpx
 from fastapi import HTTPException
 
+from app import persistent_cache
+
 logger = logging.getLogger(__name__)
 
 HORIZONS_URL = "https://ssd.jpl.nasa.gov/api/horizons.api"
@@ -59,16 +61,27 @@ _horizons_semaphore = asyncio.Semaphore(2)
 
 def _cache_get(key: str) -> dict[str, Any] | None:
     entry = _cache.get(key)
-    if entry is None:
-        return None
-    expires_at, value = entry
-    if expires_at <= time.monotonic():
+    if entry is not None:
+        expires_at, value = entry
+        if expires_at > time.monotonic():
+            return value
         del _cache[key]
+
+    persisted_entry = persistent_cache.get(key)
+    if persisted_entry is None:
         return None
+    value, remaining_ttl = persisted_entry
+    _cache[key] = (time.monotonic() + remaining_ttl, value)
     return value
 
 
-def _cache_set(key: str, value: dict[str, Any], ttl: int) -> None:
+def _cache_set(
+    key: str,
+    value: dict[str, Any],
+    ttl: int,
+    *,
+    prefix_limit: int | None = None,
+) -> None:
     now = time.monotonic()
     expired_keys = [item_key for item_key, (expiry, _) in _cache.items() if expiry <= now]
     for item_key in expired_keys:
@@ -77,6 +90,7 @@ def _cache_set(key: str, value: dict[str, Any], ttl: int) -> None:
         oldest_key = min(_cache, key=lambda item_key: _cache[item_key][0])
         del _cache[oldest_key]
     _cache[key] = (now + ttl, value)
+    persistent_cache.set(key, value, ttl, prefix_limit=prefix_limit)
 
 
 def _upstream_error(

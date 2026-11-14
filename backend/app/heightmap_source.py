@@ -359,5 +359,10 @@ async def fetch_lunar_heightmap(
     if len(heightmap_keys) >= HEIGHTMAP_CACHE_MAX_ENTRIES:
         oldest_key = min(heightmap_keys, key=lambda item_key: _cache[item_key][0])
         del _cache[oldest_key]
-    _cache_set(key, result, HEIGHTMAP_CACHE_TTL)
+    _cache_set(
+        key,
+        result,
+        HEIGHTMAP_CACHE_TTL,
+        prefix_limit=HEIGHTMAP_CACHE_MAX_ENTRIES,
+    )
     return result

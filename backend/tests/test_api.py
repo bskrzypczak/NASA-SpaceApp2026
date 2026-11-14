@@ -318,7 +318,8 @@ def test_simulation_post_and_get_return_idempotent_contract(monkeypatch):
 
     monkeypatch.setattr("app.simulation_routes.fetch_ephemeris", fake_ephemeris)
     monkeypatch.setattr("app.simulation_routes.fetch_lunar_elevation", fake_terrain)
-    monkeypatch.setattr("app.simulation_routes.SIMULATIONS", {})
+    simulation_cache = {}
+    monkeypatch.setattr("app.simulation_routes.SIMULATIONS", simulation_cache)
     response = client.post(
         f"{API}/simulations",
         json={
@@ -342,6 +343,9 @@ def test_simulation_post_and_get_return_idempotent_contract(monkeypatch):
     assert result["input"]["hardware"]["batteryWh"] == 20000
     assert result["summary"]["successPct"] == 97
     assert result["timeseries"]["stepMin"] == 720
+    assert client.get(f"{API}/simulations/{result['id']}").json() == result
+
+    simulation_cache.clear()
     assert client.get(f"{API}/simulations/{result['id']}").json() == result
 
     repeated = client.post(

@@ -8,7 +8,7 @@ Aktualizacja: 2026-11-14
   `/api/v1/sites/{id}`, `/api/v1/terrain/point`, `/api/v1/terrain/heightmap`,
   `/api/v1/horizon`, `/api/v1/ephemeris`, `/api/v1/simulations`,
   `/api/v1/simulations/{id}`, `/api/v1/calendar`,
-  `/api/v1/scenarios/compare` i `/api/v1/meta/sources`.
+  `/api/v1/scenarios/compare`, `/api/v1/layers` i `/api/v1/meta/sources`.
 - Rozdzielono routery symulacji i kalendarza od konfiguracji aplikacji oraz
   wydzielono obliczenia heightmapy i horyzontu do osobnych modułów źródeł.
   Żaden plik Python w `backend/app` nie przekracza 700 linii.
@@ -50,19 +50,30 @@ Aktualizacja: 2026-11-14
 - Dodano `POST /api/v1/scenarios/compare`: uruchamia 2–4 zapisane symulacje,
   porównuje progi zapasu energii i widoczności Ziemi oraz wybiera rekomendację
   z preferencją daty bazowej przy różnicy wyniku mniejszej niż 3 pkt.
-- Wyniki symulacji mają deterministyczne ID i są dostępne w pamięci procesu
-  (maksymalnie 256 wpisów); nie przetrwają restartu serwera.
+- Cache DEM, heightmap, horyzontu i efemeryd oraz wyniki symulacji są
+  przechowywane w SQLite (`backend/.cache/`) i przetrwają restart serwera.
+  `HORIZON_CACHE_DIR` pozwala wskazać inny katalog; cache danych źródłowych i
+  symulacji wygasa po 24 godzinach.
+- Wyniki symulacji mają deterministyczne ID; zapis pamięciowy jest ograniczony
+  do 256 wpisów, a zapis dyskowy jest odtwarzany przy kolejnym żądaniu.
+- Dodano skrypt `python -m scripts.warmup`, który przygotowuje DEM, horyzont i
+  domyślne symulacje dla czterech pierwszych wyróżnionych miejsc frontendu.
+  Uruchomienie produkcyjne skryptu wymaga dostępu do źródeł NASA/JPL.
 - Rasterio 1.4.4 działa w `C:\Users\joasi\Documents\PP\SEM_2\.venv`.
   Podłączono odczyt wartości `inPermanentShadow` z rastra PSR PGDA (20 m/px,
   80–90°S); piksele NoData i punkty poza zasięgiem pozostają `null`. Live
   sprawdzono wynik `true` dla `(-88, 0)` i `false` dla `(-89.45, -137.3)`.
-- Testy backendu: `57 passed`.
+- Testy backendu po wdrożeniu trwałego cache: `62 passed`, 1 ostrzeżenie
+  deprecacyjne Starlette/httpx.
 - Live dla `(-89.45, -137.3)`: DEM zwrócił wysokość `1956 m`, próbki N/S/E/W
   `1954`, `1955.5`, `1953` i `1952.5 m`, a nachylenie `0.453°`.
   Projekcję północną sprawdzono dodatkowo względem wartości z eksportu GeoTIFF.
 - Live `/horizon` dla `(-89.45, -137.3)`: HTTP 200, 720 binów, DEM
   `LRO_LOLA_DEM_SPole45_100mp_v04`, zakres kątów `-2.845°`–`0.013°`.
-  Pierwsze pobranie obrazu trwało około 42 s; cache jest w pamięci procesu.
+  Pierwsze pobranie obrazu w tym smoke teście trwało około 42 s.
+- Trwały cache zweryfikowano testami: po wyczyszczeniu cache RAM wpis źródłowy
+  został odczytany z SQLite, a `GET /simulations/{id}` odtworzył wynik po
+  opróżnieniu słownika procesu.
 - Live `/terrain/heightmap`: HTTP 200 dla DEM południowego, północnego i
   globalnego; domyślna siatka południowa ma 256×256 próbek. JSON i PNG16
   zweryfikowano osobno. Na punkcie `(-89.45, -137.3)` interpolowane
@@ -80,17 +91,18 @@ Aktualizacja: 2026-11-14
 
 ## Do zrobienia
 
-- Katalog `GET /layers` zwraca warstwy znane frontendowi. Kafelki mapowe
-  (`/layers/{layer}/tiles/{z}/{x}/{y}.png`) nie są jeszcze serwowane; jeśli
-  frontend potrzebuje ich jako rzeczywistych nakładek, uzgodnić źródła i
-  dodać endpoint lub statyczne URL-e CDN.
+- Następny: `GET /layers/{id}/grid` — najpierw nachylenie liczone z heightmapy
+  i PSR z istniejącego rastra; później oświetlenie i widoczność Ziemi z PGDA.
+- Następnie `POST /nearby`: mapa wrażliwości małych zmian położenia; ograniczyć
+  liczbę komórek lub uruchamiać obliczenia asynchronicznie.
+- Następnie `/validation`: porównać średnie oświetlenie z obliczeń backendu,
+  PGDA i LROC oraz zwrócić jedną liczbę do prezentacji.
+- Zweryfikować współrzędne czterech miejsc demo na niezależnym źródle i dopiero
+  wtedy ustawić im `coordsVerified: true`.
+- Kafelki mapowe (`/layers/{layer}/tiles/...`) nadal nie są serwowane; aktualny
+  kontrakt warstw opiera się na siatkach `/layers/{id}/grid`.
 - Zweryfikować wysokości i nachylenie na kolejnych niezależnych punktach
-  kontrolnych; obecnie live sprawdzono jeden punkt na biegunie południowym.
-- Zweryfikować współrzędne katalogu miejsc.
-- Podłączyć planowany DEM PGDA 5/20 m/px; obecny profil horyzontu korzysta
-  z DEM Moon Trek 100 m/px.
-- Zaimplementować pozostałe endpointy opisane w specyfikacji, m.in.
-  nearby i warstwy, jeśli nadal należą do zakresu.
+  kontrolnych oraz podłączyć planowany DEM PGDA 5/20 m/px.
 
 ## Ograniczenia obecnej wersji
 
@@ -100,9 +112,9 @@ Aktualizacja: 2026-11-14
 - Heightmapa używa tego samego DEM Moon Trek; większe `res` interpoluje źródło,
   ale nie dodaje szczegółów. Raster PGDA 5/20 m/px pozostaje niepodłączony.
 - Pierwsze żądanie `/horizon` pobiera duży obraz DEM i może trwać kilkadziesiąt
-  sekund. Cache działa w pamięci procesu.
+  sekund; warm-up pozwala wypełnić trwały cache przed prezentacją.
 - Symulacje wykonują się synchronicznie; tryb z nowym profilem horyzontu może
-  trwać kilkadziesiąt sekund. Zapis wyników jest tylko w pamięci procesu.
+  trwać kilkadziesiąt sekund. Wyniki są cache'owane na dysku przez 24 godziny.
 - Kalendarz wykonuje się synchronicznie; pierwsze żądanie obejmujące rok może
   wymagać kilku zapytań do Horizons i potrwać długo.
 - Porównanie scenariuszy uruchamia symulacje synchronicznie; warianty z nowym
