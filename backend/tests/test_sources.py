@@ -1,11 +1,13 @@
 import asyncio
 
+import numpy as np
 import pytest
 from fastapi import HTTPException
 
 from app.sources import (
     PermanentShadowDataError,
     _fetch_permanent_shadow,
+    _horizon_profile_from_dem,
     _parse_horizons_response,
     _south_polar_stereographic_xy,
     _slope_from_cardinal_samples,
@@ -31,6 +33,64 @@ def test_psr_projection_matches_moon_south_polar_projection():
 
     assert x == pytest.approx(-11310.3272)
     assert y == pytest.approx(-12256.8842)
+
+
+def test_horizon_profile_accounts_for_curvature_and_directional_ridge():
+    dem = np.zeros((12, 12), dtype=np.float32)
+    parameters = {
+        "left_m": -550.0,
+        "top_m": 550.0,
+        "pixel_width_m": 100.0,
+        "pixel_height_m": 100.0,
+        "nodata": None,
+        "center_x_m": 0.0,
+        "center_y_m": 0.0,
+        "lat": -90.0,
+        "lon": 0.0,
+        "height_m": 2.0,
+        "bin_deg": 90.0,
+        "max_distance_m": 500.0,
+    }
+
+    azimuths, flat_horizon = _horizon_profile_from_dem(dem, **parameters)
+
+    assert azimuths == [0.0, 90.0, 180.0, 270.0]
+    assert flat_horizon == [-0.237, -0.237, -0.237, -0.237]
+
+    dem[3, 5] = 100.0
+    _, ridge_horizon = _horizon_profile_from_dem(dem, **parameters)
+
+    assert ridge_horizon[0] > 25.0
+    assert ridge_horizon[1:] == flat_horizon[1:]
+
+
+@pytest.mark.parametrize(
+    ("bin_deg", "expected_count"),
+    [(0.5, 720), (0.1, 3600)],
+)
+def test_horizon_profile_returns_all_requested_azimuth_bins(
+    bin_deg, expected_count
+):
+    dem = np.zeros((4, 4), dtype=np.float32)
+    azimuths, elevations = _horizon_profile_from_dem(
+        dem,
+        left_m=-150.0,
+        top_m=150.0,
+        pixel_width_m=100.0,
+        pixel_height_m=100.0,
+        nodata=None,
+        center_x_m=0.0,
+        center_y_m=0.0,
+        lat=-90.0,
+        lon=0.0,
+        height_m=2.0,
+        bin_deg=bin_deg,
+        max_distance_m=100.0,
+    )
+
+    assert len(azimuths) == expected_count
+    assert len(elevations) == expected_count
+    assert azimuths[-1] == pytest.approx(360.0 - bin_deg)
 
 
 def test_psr_map_values_become_booleans_and_nodata_stays_unknown(monkeypatch):

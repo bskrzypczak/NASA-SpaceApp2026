@@ -181,14 +181,17 @@ Query:
   "maxDistanceKm": 150,
   "azimuthDeg": [0, 0.5, 1.0, "…", 359.5],
   "elevationDeg": [0.35, 0.36, 0.38, "…", 0.34],
-  "features": [
-    { "name": "Malapert massif", "azFromDeg": 107, "azToDeg": 150, "maxElevationDeg": 1.95 }
-  ],
-  "demVersion": "LOLA-PGDA-87S-5m-v1"
+  "features": [],
+  "demVersion": "LRO_LOLA_DEM_SPole45_100mp_v04",
+  "demResolutionM": 100
 }
 ```
 
 Używane przez widok **Sky 360°**. `features` są opcjonalne (etykiety gór na panoramie).
+Obecna implementacja zwraca `features: []` i liczy profil z DEM NASA Moon Trek
+o nominalnej rozdzielczości 100 m/px, nie z planowanego DEM PGDA 5/20 m/px.
+Pierwsze żądanie pobiera pełny obraz DEM i w weryfikacji live trwało około
+40–65 s; wynik jest cache'owany w pamięci procesu przez 24 godziny.
 
 ### 4.5 `GET /ephemeris` — surowe pozycje Słońca i Ziemi
 
@@ -523,8 +526,8 @@ PDF Mission brief. Na hackathon wystarczy wersja **po stronie frontendu** (`wind
 
 ### 5.1 Maska horyzontu (LOLA)
 
-1. Wczytaj DEM: 5 m/px w pobliżu (87–90°S), 20 m/px dalej (80–90°S).
-2. Dla każdego azymutu (co `binDeg`) rzucaj promień od punktu do **150 km** (przy biegunie cienie rzucają góry odległe o 100+ km).
+1. Obecna implementacja wczytuje polarny DEM NASA Moon Trek 100 m/px. Docelowy DEM PGDA 5/20 m/px nie jest jeszcze podłączony.
+2. Dla każdego azymutu (co `binDeg`) rzucaj promień od punktu do **150 km**, próbkując co 100 m (przy biegunie cienie rzucają góry odległe o 100+ km).
 3. Dla każdej próbki w odległości `d`: `angle = atan((h_teren − h_obserwatora − d²/(2R)) / d)`, gdzie `R = 1737.4 km` (krzywizna Księżyca). Maska = maksimum po próbkach.
 4. Wysokość obserwatora = teren + `heightM` (panel lub maszt).
 5. `horizonModel: "flat"` → maska = 0° wszędzie.
@@ -639,12 +642,17 @@ w pikselach NoData zwraca `null`.
 Próbki live mapy PSR zweryfikowano: `lat=-88`, `lon=0` zwróciło `true`,
 a `lat=-89.45`, `lon=-137.3` zwróciło `false`.
 
+`/horizon` pobiera obraz DEM z NASA Moon Trek ImageServer i zwraca maksymalny
+kąt terenu dla każdego azymutu. Pełny promień ma 150 km; pierwsze żądanie jest
+wolniejsze z powodu pobrania obrazu, kolejne odpowiedzi z tym samym kluczem
+korzystają z cache'u.
+
 `/ephemeris` odpytuje JPL Horizons dla obserwatora na powierzchni Księżyca
 (body 301), z modelem airless i DE441. Zakres musi mieć strefę czasową, być
 podzielny przez `stepMin` i nie przekraczać 4320 próbek. Odpowiedzi są cache'owane
 w pamięci procesu przez 24 godziny. Błędy i timeouty źródeł są zwracane jawnie.
-Symulacje, maska horyzontu z wysokorozdzielczego DEM i pozostałe endpointy
-specyfikacji wymagają dalszej implementacji oraz danych wejściowych.
+Symulacje i pozostałe endpointy specyfikacji wymagają dalszej implementacji
+oraz danych wejściowych.
 
 Sprawdzenie live wykonane 2026-11-14 dla `lat=-89.45`, `lon=-137.3`:
 `/terrain/point` zwrócił `1318 m` z `LRO_LOLA_DEM_SPole45_100mp_v04`.
@@ -652,6 +660,12 @@ Dla przedziału `2027-03-14T06:00:00Z`–`2027-03-14T06:20:00Z`, krok 10 min,
 Horizons zwrócił dla pierwszej próbki Słońce `az=241.197254°`,
 `el=-1.097653°`, a Ziemię `az=132.864769°`, `el=5.865464°`.
 Wartości są wynikiem zewnętrznych usług NASA/JPL, a nie stałymi testowymi.
+Uwaga: pomiar `/terrain/point` nie jest obecnie wiarygodnie zweryfikowany.
+Podczas prac nad `/horizon` stwierdzono, że jego zapytanie DEM przekazuje
+stopnie geograficzne z przestrzennym SR `104903` (metry stereograficzne).
+Zapytanie w poprawnych współrzędnych projekcji zwróciło dla tego punktu
+`1956 m`; korekta `/terrain/point` i ponowna walidacja nachylenia są osobnym
+zadaniem i nie zostały włączone do feature'u `/horizon`.
 
 ### Kolejność prac
 

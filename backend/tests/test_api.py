@@ -81,6 +81,58 @@ def test_terrain_point_normalizes_longitude_and_returns_nearest_site(monkeypatch
     assert response.json()["inPermanentShadow"] is False
 
 
+def test_horizon_endpoint_returns_contract_shape_and_normalizes_longitude(
+    monkeypatch,
+):
+    async def fake_horizon(lat, lon, height_m, bin_deg):
+        assert lat == -89.45
+        assert lon == -137.3
+        assert height_m == 2
+        assert bin_deg == 0.5
+        return {
+            "lat": lat,
+            "lon": lon,
+            "heightM": height_m,
+            "binDeg": bin_deg,
+            "maxDistanceKm": 150.0,
+            "azimuthDeg": [0.0, 0.5, 1.0],
+            "elevationDeg": [0.35, 0.36, 0.38],
+            "features": [],
+            "demVersion": "LRO_LOLA_DEM_SPole45_100mp_v04",
+            "demResolutionM": 100.0,
+        }
+
+    monkeypatch.setattr("app.main.fetch_horizon", fake_horizon)
+    response = client.get(
+        f"{API}/horizon",
+        params={"lat": -89.45, "lon": 222.7},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["azimuthDeg"] == [0.0, 0.5, 1.0]
+    assert response.json()["elevationDeg"] == [0.35, 0.36, 0.38]
+
+
+def test_horizon_endpoint_rejects_unsupported_bin_size():
+    response = client.get(
+        f"{API}/horizon",
+        params={"lat": -89.45, "lon": 0, "binDeg": 0.25},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["field"] == "binDeg"
+
+
+def test_horizon_endpoint_reports_dem_coverage():
+    response = client.get(
+        f"{API}/horizon",
+        params={"lat": -79.9, "lon": 0},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "OUT_OF_DEM_COVERAGE"
+
+
 def test_ephemeris_endpoint_validates_inputs_and_returns_real_source_shape(monkeypatch):
     async def fake_ephemeris(lat, lon, start, end, step_min, bodies):
         assert lat == -89.45

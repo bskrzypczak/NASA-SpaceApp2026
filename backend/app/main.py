@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.sites import FEATURED_IDS, SITE_BY_ID, SITES
-from app.sources import fetch_ephemeris, fetch_lunar_elevation
+from app.sources import fetch_ephemeris, fetch_horizon, fetch_lunar_elevation
 
 API_PREFIX = "/api/v1"
 LUNAR_RADIUS_KM = 1737.4
@@ -175,6 +175,48 @@ async def get_terrain_point(
             ),
         },
     }
+
+
+@app.get(f"{API_PREFIX}/horizon")
+async def get_horizon(
+    lat: float = Query(..., ge=-90, le=90),
+    lon: float = Query(..., ge=-180, le=360),
+    height_m: float = Query(default=2, alias="heightM", ge=0),
+    bin_deg: float = Query(default=0.5, alias="binDeg"),
+) -> dict:
+    if not math.isfinite(height_m):
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "VALIDATION_ERROR",
+                "message": "heightM must be a finite number.",
+                "field": "heightM",
+            },
+        )
+    if bin_deg not in {0.1, 0.5}:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "VALIDATION_ERROR",
+                "message": "binDeg must be 0.1 or 0.5.",
+                "field": "binDeg",
+            },
+        )
+    if lat > -80:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "OUT_OF_DEM_COVERAGE",
+                "message": "Terrain-based results require latitude at or south of 80°S.",
+                "field": "lat",
+            },
+        )
+    return await fetch_horizon(
+        lat,
+        normalize_longitude(lon),
+        height_m,
+        bin_deg,
+    )
 
 
 @app.get(f"{API_PREFIX}/ephemeris")
