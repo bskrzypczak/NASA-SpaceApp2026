@@ -59,6 +59,22 @@ i mapą equirectangular (lewa krawędź = 180° W, góra = 90° N).
 - **Warstwy mapy** (oświetlenie, widoczność Ziemi, PSR, nachylenie) — pobierane z `GET /layers`; dopóki backend nie poda `tileUrl`, są wyłączone z etykietą „coming soon”.
 - **Panel:** edycja LAT/LON (Apply / Enter), wysokość / nachylenie / PSR z `GET /terrain/point` — `null` z backendu = „—”, formularz misji (data UTC + 3/7/14/30 dni, zapisywany w store i pokazywany w popupie), „Start simulation” → popup.
 
+## Ekran 4 · Popup potwierdzenia
+
+- Scena 3D (gwiaździste tło jak na ekranie 1): **Ziemia** z wybranym miejscem startu → trasa → **Księżyc** z miejscem lądowania. Czasy etapów są na „pigułkach”, w środku łączny czas i dystans. Po trasie leci punkt (statek).
+- **Trasa alternatywna** na szaro, jak w Google Maps. Klik w jej pigułkę albo przełącznik nad sceną zmienia transfer (Direct ~4 d / Low-energy ~45 d).
+- **Wybór miejsca startu**: domyślnie NASA KSC LC-39B, plus Cape Canaveral, Vandenberg, Kourou, Baikonur, Wenchang, Sriharikota, Tanegashima (`src/data/launchSites.ts`, współrzędne przybliżone). Ziemia obraca się tak, by start był widoczny.
+- Panel: miejsce lądowania, data startu wyliczona z daty lądowania minus czas transferu, długość misji.
+- Czasy etapów to szacunki planistyczne z `src/data/route.ts`. Później zastąpi je `GET /route`.
+- Gdy popup jest otwarty, wizytówka nad pinezką na mapie Site jest ukryta.
+
+### Tekstura Ziemi
+
+NASA Blue Marble Next Generation (Topography + Bathymetry), wersja **5400×2700 JPEG**:
+https://science.nasa.gov/earth/earth-observatory/blue-marble-next-generation/topography-bathymetry-maps
+Zapisz jako `public/textures/earth_color.jpg`. Bez pliku Ziemia jest jednolicie niebieska.
+Credit: „NASA's Earth Observatory”.
+
 ## Backend i tryby API
 
 Skopiuj `.env.example` do `.env.local`:

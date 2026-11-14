@@ -1,18 +1,26 @@
 import { useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Modal } from '../components/Modal';
-import { Placeholder } from '../components/Placeholder';
-import { useSelection } from '../store/selection';
+import { RouteScene } from '../components/route/RouteScene';
+import { LaunchSitePicker } from '../components/route/LaunchSitePicker';
+import { useSelection, type TransferType } from '../store/selection';
+import { launchSiteById } from '../data/launchSites';
+import { TRANSFERS, formatDuration, subtractHours, totalHours } from '../data/route';
 import { formatLat, formatLon, toQuery } from '../lib/coords';
 
 /** Screen 4 — confirmation popup over the Site screen. Route: /site/confirm */
 export function SiteConfirmModal() {
   const navigate = useNavigate();
-  const { lat, lon, name, landingTime, missionDays } = useSelection();
+  const { lat, lon, name, landingTime, missionDays, launchSiteId, transfer, setMission } = useSelection();
   const close = useCallback(() => navigate(`/site${toQuery({ lat, lon })}`), [navigate, lat, lon]);
+
+  const launch = launchSiteById(launchSiteId);
+  const plan = TRANSFERS[transfer];
+  const launchTime = subtractHours(landingTime, totalHours(plan));
 
   return (
     <Modal
+      size="xl"
       eyebrow="Step 2 of 2 · review"
       title="Confirm your mission"
       onClose={close}
@@ -27,38 +35,63 @@ export function SiteConfirmModal() {
         </>
       }
     >
-      <Placeholder
-        label="Route map Earth → Moon"
-        note="KSC → TLI → coast → lunar orbit → descent, with time and distance on each leg, plus the low-energy alternative."
-        tag="RouteMap · next"
-        minHeight={360}
-        style={{ flex: '999 1 520px' }}
-      />
-      <div style={{ flex: '1 1 300px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <section className="confirm__route" aria-label="Route from Earth to the landing site">
+        <div className="segmented" role="group" aria-label="Transfer type">
+          {(Object.keys(TRANSFERS) as TransferType[]).map((t) => (
+            <button key={t} type="button" aria-pressed={transfer === t} onClick={() => setMission({ transfer: t })}>
+              {TRANSFERS[t].label} · {formatDuration(totalHours(TRANSFERS[t]))}
+            </button>
+          ))}
+        </div>
+
+        <div className="confirm__scene">
+          <RouteScene launch={launch} landing={{ lat, lon }} transfer={transfer} onTransferChange={(t) => setMission({ transfer: t })} />
+        </div>
+
+        <ol className="confirm__legs">
+          {plan.legs.map((l, i) => (
+            <li key={l.name}>
+              <span className="mono" style={{ color: 'var(--accent)', fontSize: 12 }}>
+                {String(i + 1).padStart(2, '0')}
+              </span>
+              <strong>{l.name}</strong>
+              <span className="mono muted">{formatDuration(l.hours)}</span>
+            </li>
+          ))}
+        </ol>
+        <p className="muted" style={{ margin: 0, fontSize: 13 }}>
+          Not to scale. 384,400 km is the average Earth–Moon distance; leg times are planning estimates.
+        </p>
+      </section>
+
+      <section className="confirm__side" aria-label="Mission details">
+        <LaunchSitePicker value={launchSiteId} onChange={(id) => setMission({ launchSiteId: id })} />
+
         <dl className="details">
           <div>
             <dt>Landing site</dt>
             <dd>{name ?? 'Custom point'}</dd>
           </div>
           <div>
-            <dt>Latitude</dt>
-            <dd>{formatLat(lat, 4)}</dd>
+            <dt>Coordinates</dt>
+            <dd>
+              {formatLat(lat, 3)} · {formatLon(lon, 3)}
+            </dd>
           </div>
           <div>
-            <dt>Longitude</dt>
-            <dd>{formatLon(lon, 4)}</dd>
+            <dt>Launch (UTC)</dt>
+            <dd>{launchTime.replace('T', ' ')}</dd>
           </div>
           <div>
             <dt>Landing (UTC)</dt>
             <dd>{landingTime.replace('T', ' ')}</dd>
           </div>
           <div>
-            <dt>Mission length</dt>
+            <dt>Surface mission</dt>
             <dd>{missionDays} days</dd>
           </div>
         </dl>
-        <Placeholder label="Hardware preset" note="Battery, solar array, loads." tag="HardwarePreset · next" minHeight={100} />
-      </div>
+      </section>
     </Modal>
   );
 }

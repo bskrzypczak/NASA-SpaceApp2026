@@ -6,10 +6,11 @@ interface ModalProps {
   onClose: () => void;
   children: ReactNode;
   footer?: ReactNode;
+  size?: 'md' | 'xl';
 }
 
 /** Accessible dialog: Esc closes, backdrop click closes, focus moves into the dialog. */
-export function Modal({ title, eyebrow, onClose, children, footer }: ModalProps) {
+export function Modal({ title, eyebrow, onClose, children, footer, size = 'md' }: ModalProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -26,7 +27,7 @@ export function Modal({ title, eyebrow, onClose, children, footer }: ModalProps)
 
   return (
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div ref={dialogRef} className="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" tabIndex={-1}>
+      <div ref={dialogRef} className={`modal${size === 'xl' ? ' modal--xl' : ''}`} role="dialog" aria-modal="true" aria-labelledby="modal-title" tabIndex={-1}>
         <div className="modal__header">
           <div>
             {eyebrow && <span className="eyebrow">{eyebrow}</span>}

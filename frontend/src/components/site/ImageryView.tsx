@@ -27,11 +27,12 @@ interface ImageryViewProps {
   onViewHeightKm: (km: number) => void;
   onHover: (p: LatLon | null) => void;
   onPick: () => void;
+  hidePinLabel?: boolean;
 }
 
 /** Top-down close-up of the LROC mosaic around the pin (north up). Drag = pan, wheel = zoom, click = move pin. */
-export function ImageryView({ lat, lon, apiRef, onViewHeightKm, onHover, onPick }: ImageryViewProps) {
-  const globeProps = { onHover, onPick };
+export function ImageryView({ lat, lon, apiRef, onViewHeightKm, onHover, onPick, hidePinLabel = false }: ImageryViewProps) {
+  const globeProps = { onHover, onPick, showPinLabel: !hidePinLabel };
   return (
     <Canvas camera={{ fov: FOV, near: 0.00005, far: 10 }} aria-label="Top-down imagery around the landing point">
       <color attach="background" args={['#020611']} />

@@ -18,7 +18,7 @@ function scaleBar(viewHeightKm: number, containerPx: number) {
 }
 
 /** Screen 3 map: LROC imagery close-up (works now) or LOLA shaded relief (from the backend). */
-export function SiteMap({ lat, lon, onPick }: LatLon & { onPick: () => void }) {
+export function SiteMap({ lat, lon, onPick, hidePinLabel = false }: LatLon & { onPick: () => void; hidePinLabel?: boolean }) {
   const [view, setView] = useState<View>('imagery');
   const [sizeKm, setSizeKm] = useState(20);
   const [viewKm, setViewKm] = useState(30);
@@ -48,7 +48,7 @@ export function SiteMap({ lat, lon, onPick }: LatLon & { onPick: () => void }) {
   return (
     <div className="site-map" ref={boxRef}>
       {view === 'imagery' ? (
-        <ImageryView lat={lat} lon={lon} apiRef={imageryApi} onViewHeightKm={setViewKm} onHover={setHover} onPick={onPick} />
+        <ImageryView lat={lat} lon={lon} apiRef={imageryApi} onViewHeightKm={setViewKm} onHover={setHover} onPick={onPick} hidePinLabel={hidePinLabel} />
       ) : heightmap.data ? (
         <TerrainView data={heightmap.data} onHoverElevation={setHoverElev} />
       ) : (

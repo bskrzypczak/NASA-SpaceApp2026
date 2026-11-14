@@ -17,6 +17,8 @@ interface GlobeProps {
   onHover: (p: LatLon | null) => void;
   /** Called when the user picks a point by clicking the surface or a marker. */
   onPick: () => void;
+  /** Hide the name/coords card above the pin (e.g. while a dialog is open). */
+  showPinLabel?: boolean;
 }
 
 /** Loads the texture (suspends while loading). Wrap in <Suspense> + an error boundary. */
@@ -28,7 +30,7 @@ export function TexturedMoonGlobe(props: GlobeProps) {
 }
 
 /** The Moon sphere, the catalog markers and the selection pin. Works without a texture (grey Moon). */
-export function MoonGlobe({ onHover, onPick, map }: GlobeProps & { map?: Texture | null }) {
+export function MoonGlobe({ onHover, onPick, showPinLabel = true, map }: GlobeProps & { map?: Texture | null }) {
   const { lat, lon, name, selectSite } = useSelection();
 
   function handleClick(e: ThreeEvent<MouseEvent>) {
@@ -63,7 +65,7 @@ export function MoonGlobe({ onHover, onPick, map }: GlobeProps & { map?: Texture
         />
       ))}
 
-      <Pin lat={lat} lon={lon} label={name ?? 'Custom point'} />
+      <Pin lat={lat} lon={lon} label={name ?? 'Custom point'} showLabel={showPinLabel} />
     </group>
   );
 }
@@ -111,7 +113,7 @@ function SiteMarker({ lat, lon, label, onSelect }: { lat: number; lon: number; l
         <meshBasicMaterial color={hovered ? '#EAFE07' : '#ffffff'} />
       </mesh>
       {hovered && (
-        <Html center position={[0, 0.05, 0]} style={{ pointerEvents: 'none' }}>
+        <Html center zIndexRange={[20, 0]} position={[0, 0.05, 0]} style={{ pointerEvents: 'none' }}>
           <span className="moon-marker-label">{label}</span>
         </Html>
       )}
@@ -119,7 +121,7 @@ function SiteMarker({ lat, lon, label, onSelect }: { lat: number; lon: number; l
   );
 }
 
-function Pin({ lat, lon, label }: { lat: number; lon: number; label: string }) {
+function Pin({ lat, lon, label, showLabel }: { lat: number; lon: number; label: string; showLabel: boolean }) {
   const ref = useRef<Group>(null);
   const { pos, quat } = useMemo(() => surfaceTransform(lat, lon, 1.0), [lat, lon]);
   useScreenScale(ref, 0.6);
@@ -138,14 +140,16 @@ function Pin({ lat, lon, label }: { lat: number; lon: number; label: string }) {
         <ringGeometry args={[0.02, 0.028, 40]} />
         <meshBasicMaterial color="#EAFE07" transparent opacity={0.8} />
       </mesh>
-      <Html center occlude position={[0, 0.13, 0]} style={{ pointerEvents: 'none' }}>
-        <div className="moon-pin-label" role="status">
-          <strong>{label}</strong>
-          <span>
-            {formatLat(lat)} · {formatLon(lon)}
-          </span>
-        </div>
-      </Html>
+      {showLabel && (
+        <Html center occlude zIndexRange={[20, 0]} position={[0, 0.13, 0]} style={{ pointerEvents: 'none' }}>
+          <div className="moon-pin-label" role="status">
+            <strong>{label}</strong>
+            <span>
+              {formatLat(lat)} · {formatLon(lon)}
+            </span>
+          </div>
+        </Html>
+      )}
     </group>
   );
 }

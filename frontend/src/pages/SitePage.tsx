@@ -38,7 +38,7 @@ export function SitePage() {
   return (
     <main className="site-page">
       <div className="site-page__map">
-        <SiteMap lat={lat} lon={lon} onPick={() => {}} />
+        <SiteMap lat={lat} lon={lon} onPick={() => {}} hidePinLabel={location.pathname.endsWith('/confirm')} />
       </div>
 
       <aside className="site-page__panel" aria-label="Landing site and simulation setup">
