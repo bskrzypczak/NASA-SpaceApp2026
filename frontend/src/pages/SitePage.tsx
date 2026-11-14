@@ -4,7 +4,7 @@ import { SiteMap } from '../components/site/SiteMap';
 import { MissionForm } from '../components/site/MissionForm';
 import { useSelection } from '../store/selection';
 import { useApi } from '../hooks/useApi';
-import { apiMode, getTerrainPoint } from '../api/client';
+import { apiMode, getQuickTerrain, getTerrainPoint } from '../api/client';
 import { SITES } from '../data/sites';
 import { formatLat, formatLon, fromQuery, parseLat, parseLon, toQuery } from '../lib/coords';
 import './SitePage.css';
@@ -32,7 +32,13 @@ export function SitePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lat, lon]);
 
-  const terrain = useApi((signal) => getTerrainPoint(lat, lon, signal), [lat, lon]);
+  // Progressive: elevation arrives from a tiny heightmap first; slope + PSR from /terrain/point when it is ready.
+  const [retry, setRetry] = useState(0);
+  const quick = useApi((signal) => getQuickTerrain(lat, lon, signal), [lat, lon, retry], { debounceMs: 300 });
+  const terrain = useApi((signal) => getTerrainPoint(lat, lon, signal), [lat, lon, retry], { debounceMs: 300 });
+  const elevationM = terrain.data?.elevationM ?? quick.data?.elevationM;
+  const elevationLoading = elevationM == null && (quick.loading || terrain.loading);
+  const approxSlope = terrain.data?.slopeDeg == null ? quick.data?.slopeDeg : null;
   const site = SITES.find((s) => s.name === name);
   const title = name ?? 'Custom point';
 
@@ -60,15 +66,21 @@ export function SitePage() {
         <dl className="details">
           <div>
             <dt>Elevation</dt>
-            <dd>{valueOrDash(terrain.data?.elevationM, (v) => `${Math.round(v).toLocaleString('en-US')} m`, terrain.loading)}</dd>
+            <dd>{valueOrDash(elevationM, (v) => `${Math.round(v).toLocaleString('en-US')} m`, elevationLoading)}</dd>
           </div>
           <div>
             <dt>Slope</dt>
-            <dd title="Backend does not compute slope yet">{valueOrDash(terrain.data?.slopeDeg, (v) => `${v.toFixed(1)}°`, terrain.loading)}</dd>
+            <dd title={approxSlope != null ? 'Approximate, from a 5 km terrain grid. Precise value comes from /terrain/point.' : undefined}>
+              {terrain.data?.slopeDeg != null
+                ? `${terrain.data.slopeDeg.toFixed(1)}°`
+                : approxSlope != null
+                  ? `≈ ${approxSlope.toFixed(1)}°${terrain.loading ? ' …' : ''}`
+                  : valueOrDash(null, String, terrain.loading || quick.loading)}
+            </dd>
           </div>
           <div>
             <dt>Permanent shadow</dt>
-            <dd title="PSR map not wired in yet">
+            <dd>
               {terrain.loading ? '…' : terrain.data?.inPermanentShadow == null ? '—' : terrain.data.inPermanentShadow ? 'Yes' : 'No'}
             </dd>
           </div>
@@ -81,13 +93,32 @@ export function SitePage() {
                   : 'outside DEM coverage'
                 : apiMode === 'offline'
                   ? 'backend not connected'
-                  : terrain.error
-                    ? 'error'
-                    : '…'}
+                  : quick.data
+                    ? `LOLA ${quick.data.demResolutionM ?? '?'} m/px${terrain.loading ? ' · details loading…' : ''}`
+                    : terrain.error
+                      ? 'error'
+                      : '…'}
             </dd>
           </div>
         </dl>
-        {terrain.error && <p className="error" style={{ margin: 0 }}>{terrain.error.message}</p>}
+        {terrain.data?.complete === false && !terrain.error && (
+          <p className="muted" role="status" style={{ margin: 0, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+            <span>! NASA services were slow: slope or shadow data is missing for now.</span>
+            <button type="button" className="btn" onClick={() => setRetry((n) => n + 1)}>
+              ↻ Retry
+            </button>
+          </p>
+        )}
+        {terrain.error && (
+          <p className="error" role="status" style={{ margin: 0, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+            <span>
+              ! {quick.data ? 'Slope and shadow details unavailable' : 'Terrain unavailable'}: {terrain.error.message}
+            </span>
+            <button type="button" className="btn" onClick={() => setRetry((n) => n + 1)}>
+              ↻ Retry
+            </button>
+          </p>
+        )}
 
         <MissionForm />
         <Link to="/dates" className="btn" style={{ justifyContent: 'space-between', textTransform: 'none', letterSpacing: 0 }}>
@@ -95,10 +126,10 @@ export function SitePage() {
           <span className="muted mono">calendar →</span>
         </Link>
 
-        <button type="button" className="btn nearby-link" disabled title="Sensitivity map — next sprint">
+        <Link to="/nearby" className="btn nearby-link">
           <span>◎ See better places nearby</span>
-          <span className="mono muted" style={{ textTransform: 'none', letterSpacing: 0 }}>coming soon</span>
-        </button>
+          <span className="mono muted" style={{ textTransform: 'none', letterSpacing: 0 }}>sensitivity map →</span>
+        </Link>
 
         <button
           type="button"

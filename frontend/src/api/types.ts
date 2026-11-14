@@ -10,6 +10,8 @@ export interface TerrainPoint {
   demResolutionM: number | null;
   /** null until a PSR map is wired in. */
   inPermanentShadow: boolean | null;
+  /** false = slope or PSR could not be fetched this time (NASA service slow); retrying may fill them in. */
+  complete?: boolean;
   nearestSite?: { id: string; distanceKm: number } | null;
   demVersion?: string;
   source?: string;
@@ -27,6 +29,7 @@ export interface Heightmap {
   heightsM: number[][];
   northUp: boolean;
   demVersion: string;
+  demResolutionM?: number;
   /** Set by the mock generator only. */
   mock?: boolean;
   /** Why mock data is shown, e.g. the endpoint is not built yet. */
@@ -55,6 +58,28 @@ export interface LayerInfo {
   source: string;
   /** null = backend does not serve this layer yet. */
   tileUrl: string | null;
+  /** true = GET /layers/{id}/grid works for this layer. Missing → frontend default (slope, psr). */
+  grid?: boolean;
+}
+
+/** GET /layers/{id}/grid — same grid layout as /terrain/heightmap for the same lat/lon/sizeKm/res. */
+export interface LayerGrid {
+  layerId: LayerId;
+  lat: number;
+  lon: number;
+  sizeKm: number;
+  res: number;
+  /** continuous = values in `unit` (slope °), mask = 1 inside / 0 outside (PSR). */
+  kind: 'continuous' | 'mask';
+  unit: string | null;
+  min: number | null;
+  max: number | null;
+  /** values[row][col], row 0 = north edge, col 0 = west edge; null = NoData. */
+  values: (number | null)[][];
+  northUp: boolean;
+  source: string;
+  version: string;
+  mock?: boolean;
 }
 
 export interface ApiErrorBody {
@@ -242,5 +267,46 @@ export interface ScenarioResult {
 export interface ScenarioCompareResponse {
   results: ScenarioResult[];
   recommendation: { label: string; reason: string } | null;
+  mock?: boolean;
+}
+
+/* ---------- Nearby sensitivity map (backend §4.10) ---------- */
+
+export type NearbyGoal = 'balanced' | 'power' | 'comms';
+
+export interface NearbyRequest {
+  center: { lat: number; lon: number };
+  radiusKm: number;
+  landingTime: string;
+  missionDays: number;
+  goal: NearbyGoal;
+  maxSlopeDeg: number;
+  top: number;
+}
+
+export interface NearbySuggestion {
+  rank: string;
+  lat: number;
+  lon: number;
+  distanceKm: number;
+  successPct: number;
+  why: string[];
+}
+
+export interface NearbyResponse {
+  grid: {
+    originLat: number;
+    originLon: number;
+    /** Real spacing between samples (= radiusKm × 1000 for the 3×3 grid). */
+    cellM: number;
+    cols: number;
+    rows: number;
+    /** row 0 = north. null = not simulated (unsafe or not sampled). */
+    successPct: (number | null)[][];
+    /** true = unsafe (slope / PSR / no data) — or a corner the backend does not sample. */
+    excluded: boolean[][];
+  };
+  center: { successPct: number };
+  suggestions: NearbySuggestion[];
   mock?: boolean;
 }

@@ -117,7 +117,23 @@ Skopiuj `.env.example` do `.env.local`:
 | mock | brak URL, `VITE_USE_MOCKS=true` | generowany teren do pracy nad UI — zawsze z plakietką **MOCK DATA** |
 | offline | brak URL, `VITE_USE_MOCKS` ≠ true | wartości „—”, komunikat „backend not connected” |
 
-Klient: `src/api/client.ts`, typy odpowiedzi zgodne z `backend/README.md`: `src/api/types.ts`.
+Klient: `src/api/client.ts` (funkcje endpointów) + `src/api/http.ts` (transport), typy odpowiedzi zgodne z `backend/README.md`: `src/api/types.ts`.
+
+### Transport (`src/api/http.ts`)
+
+| Mechanizm | Zachowanie |
+|---|---|
+| Timeout każdego zapytania | `TIMEOUT.short` 45 s, teren/siatki 150 s, `/horizon` i symulacja 300 s, kalendarz/scenariusze/nearby 420 s. Po czasie: `ApiError('CLIENT_TIMEOUT')` zamiast wiecznego „…” |
+| Wspólne zapytania GET | identyczne GET-y w locie (np. podwójny efekt StrictMode, Explore → Site dla tego samego punktu) idą do backendu **raz**; anulowanie przez jednego odbiorcę nie przerywa pozostałym |
+| Cache GET | udane odpowiedzi przez 5 min (maks. 120); `cacheIf` pomija odpowiedzi częściowe (`/terrain/point` z `complete: false`); `clearApiCache()` czyści |
+| Ponowienia | GET: 1× przy błędzie sieci i 502/503/504 (czeka `retryAfterS`, 1–5 s). POST: domyślnie bez, `/simulations` i `/nearby` 1× (są idempotentne) |
+| Błędy | `NETWORK` (backend nie działa), `CLIENT_TIMEOUT`, albo kod z backendu (`UPSTREAM_ERROR`, `TIMEOUT`, …) |
+
+Anulowanie i ponowne podłączenie w tym samym takcie (React StrictMode w dev) nie gubi zapytania: wspólne zapytanie jest przerywane dopiero w następnym takcie, gdy naprawdę nikt na nie nie czeka.
+
+Długie zadania (kalendarz, scenariusze, nearby) pokazują `components/StepLoader.tsx`: pasek postępu, szacowane etapy, czas, a po ~2 min komunikat, że NASA bywa wolna.
+
+`useApi(fn, deps, { debounceMs })` czyści dane przy zmianie parametrów (stara wysokość nie wisi przy nowym punkcie) i opcjonalnie czeka, aż użytkownik przestanie klikać — Explore, Site i mapa terenu używają 300 ms.
 Pola, których backend jeszcze nie liczy (`slopeDeg`, `inPermanentShadow`), są typowane jako `| null` i obsłużone w UI.
 
 ## Struktura

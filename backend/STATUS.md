@@ -141,6 +141,34 @@ Aktualizacja: 2026-11-14
   odpowiedź. Krótki test 1-dniowy z krokiem 12 h zajął około 38 s (pierwszy
   odczyt DEM); nie jest to reprezentatywny wynik naukowy dla pełnej misji.
 
+- Naprawa „gubiących się” zapytań (2026-11-14):
+  - Odczyty PGDA przez GDAL `/vsicurl` dostały timeouty (`GDAL_HTTP_TIMEOUT=20`,
+    limit 45 s na cały odczyt). Wcześniej zawieszony odczyt PSR blokował
+    `/terrain/point` bez końca.
+  - Moon Trek ma dwa pasy: `bulk` (1 równoległe) dla wycinków DEM ~38 MB i
+    `light` (4) dla reszty. Duży eksport nie blokuje już wysokości punktu.
+  - `single_flight` dla wycinka DEM, horyzontu, heightmapy, `/terrain/point` i
+    efemeryd: równoległe zapytania o to samo dają jedno pobranie.
+  - `/terrain/point` zwraca wysokość, nawet gdy PSR lub próbki do nachylenia
+    zawiodą (`complete: false`, cache 60 s).
+  - Błąd: wycinek DEM w projekcji globalnej był próbkowany jak biegunowy, więc
+    wysokość poza biegunami z cache zawsze wychodziła `null`. Naprawione.
+  - Błąd: heightmapa brała wycinek z cache bez sprawdzenia marginesu, co dawało
+    fałszywe `OUT_OF_DEM_COVERAGE` przy krawędzi wycinka. Naprawione.
+  - Limit heightmap w cache podniesiony z 4 do 48; 16-pikselowe „szybkie”
+    heightmapy wypierały mapy 256 px.
+  - Horizons: jedno ponowienie przy zerwanym połączeniu lub timeoucie.
+  - Testy: `96 passed`.
+- Siatka PSR i `/nearby` (2026-11-14, wieczór):
+  - Raster PGDA PSR oznacza tylko piksele PSR, reszta mapy 80–90°S to NoData.
+    Siatka zamieniała NoData na `null`, więc cała okolica wychodziła jako „brak
+    danych”, a `/nearby` wykluczał wszystkie komórki, łącznie ze środkiem.
+    Teraz NoData wewnątrz mapy oznacza „nie PSR” (`0`), a `null` zostaje tylko
+    poza zasięgiem rastra. Klucz cache siatek zmieniony na `layergrid:psr-v2`,
+    więc stare, błędne siatki nie są używane.
+  - `/nearby` nie wyklucza komórek z `psr = null` (poza mapą PSR, np. na
+    północy): to „nie wiadomo”, a nie „niebezpiecznie”.
+
 ## Do zrobienia
 
 - Kafelki mapowe (`/layers/{layer}/tiles/...`) nadal nie są serwowane; aktualny

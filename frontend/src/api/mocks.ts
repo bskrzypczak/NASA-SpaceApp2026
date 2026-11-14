@@ -1,4 +1,5 @@
-import type { CalendarRequest, CalendarResult, Heightmap, HorizonProfile, ScenarioCompareRequest, ScenarioCompareResponse, SimulationRequest, SimulationResult, TerrainPoint } from './types';
+import type { CalendarRequest, CalendarResult, Heightmap, HorizonProfile, LayerGrid, LayerId, NearbyRequest, NearbyResponse, ScenarioCompareRequest, ScenarioCompareResponse, SimulationRequest, SimulationResult, TerrainPoint } from './types';
+import { slopeFromHeights } from '../lib/layers';
 import { DEFAULT_HARDWARE, DEFAULT_WEIGHTS, calculateCase, interpolateHorizon } from '../lib/simModel';
 
 /** Small deterministic PRNG so the same point always gives the same mock terrain. */
@@ -207,4 +208,59 @@ export function mockCompare(req: ScenarioCompareRequest): ScenarioCompareRespons
     recommendation = { label: results[sel].label, reason: same.length ? `Scores ${score}% on the baseline date — no launch slip needed.` : `Scores ${score}% and meets all requirements.` };
   }
   return { results, recommendation, mock: true };
+}
+
+/** Mock /layers/{id}/grid built from the mock heightmap, so overlays line up with the terrain. */
+export function mockLayerGrid(id: LayerId, lat: number, lon: number, sizeKm = 20, res = 256): LayerGrid {
+  const hm = mockHeightmap(lat, lon, sizeKm, res);
+  let values: (number | null)[][];
+  if (id === 'slope') values = slopeFromHeights(hm.heightsM, sizeKm);
+  else if (id === 'psr') {
+    // Deep crater floors near the pole; no coverage north of 80°S (like the real PGDA raster).
+    const cut = hm.minElevationM + (hm.maxElevationM - hm.minElevationM) * 0.18;
+    values = hm.heightsM.map((row) => row.map((h) => (lat > -80 ? null : h < cut ? 1 : 0)));
+  } else if (id === 'illumination' || id === 'earth-visibility') {
+    // PGDA averages cover 65–90° N/S; higher ground sees more Sun / Earth.
+    const span = Math.max(1, hm.maxElevationM - hm.minElevationM);
+    const base = id === 'illumination' ? 20 : 10;
+    values = hm.heightsM.map((row) =>
+      row.map((h) => (Math.abs(lat) < 65 ? null : Math.round(Math.min(100, base + ((h - hm.minElevationM) / span) * 70) * 1000) / 1000)),
+    );
+  } else values = hm.heightsM.map((row) => row.map(() => null));
+  const flat = values.flat().filter((v): v is number => v !== null);
+  return {
+    layerId: id, lat, lon, sizeKm, res,
+    kind: id === 'psr' ? 'mask' : 'continuous',
+    unit: id === 'slope' ? 'deg' : id === 'psr' ? null : '%',
+    min: flat.length ? flat.reduce((a, b) => Math.min(a, b)) : null,
+    max: flat.length ? flat.reduce((a, b) => Math.max(a, b)) : null,
+    values, northUp: true, source: 'mock', version: 'mock', mock: true,
+  };
+}
+
+/** Mock /nearby: same 3×3 layout as the backend (corners not sampled). */
+export function mockNearby(req: NearbyRequest): NearbyResponse {
+  const r = rng(seedFrom(req.center.lat + req.radiusKm, req.center.lon + req.goal.length));
+  const centre = 45 + Math.round(r() * 30);
+  const R = 1737.4;
+  const dLat = (req.radiusKm / R) * (180 / Math.PI);
+  const dLon = dLat / Math.max(0.01, Math.cos((req.center.lat * Math.PI) / 180));
+  const successPct: (number | null)[][] = [[null, null, null], [null, centre, null], [null, null, null]];
+  const excluded = [[true, false, true], [false, false, false], [true, false, true]];
+  const cells: [number, number, number, number][] = [[0, 1, dLat, 0], [1, 2, 0, dLon], [2, 1, -dLat, 0], [1, 0, 0, -dLon]];
+  const suggestions = [];
+  for (const [row, col, la, lo] of cells) {
+    if (r() < 0.2) continue; // unsafe cell
+    const v = Math.max(5, Math.min(98, centre + Math.round((r() - 0.4) * 30)));
+    successPct[row][col] = v;
+    if (v > centre) suggestions.push({ lat: req.center.lat + la, lon: req.center.lon + lo, distanceKm: req.radiusKm, successPct: v, why: [`+${((v - centre) / 10).toFixed(1)} days of sunlight`, `+${v - centre} pp minimum battery charge`] });
+  }
+  for (const [row, col] of cells) if (successPct[row][col] === null) excluded[row][col] = true;
+  suggestions.sort((a, b) => b.successPct - a.successPct);
+  return {
+    grid: { originLat: req.center.lat + dLat, originLon: req.center.lon - dLon, cellM: req.radiusKm * 1000, cols: 3, rows: 3, successPct, excluded },
+    center: { successPct: centre },
+    suggestions: suggestions.slice(0, req.top).map((s, i) => ({ ...s, rank: String.fromCharCode(65 + i) })),
+    mock: true,
+  };
 }

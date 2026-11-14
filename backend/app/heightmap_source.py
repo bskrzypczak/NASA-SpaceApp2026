@@ -14,10 +14,12 @@ from app.sources import (
     _cache_set,
     _dem_service_for_latitude,
     _upstream_error,
+    single_flight,
 )
 
 HEIGHTMAP_CACHE_TTL = 24 * 60 * 60
-HEIGHTMAP_CACHE_MAX_ENTRIES = 4
+# Was 4: the 16-px quick heightmaps used for elevation evicted the 256-px terrain maps.
+HEIGHTMAP_CACHE_MAX_ENTRIES = 48
 MAX_ABS_LUNAR_ELEVATION_M = 20_000.0
 
 
@@ -306,9 +308,26 @@ async def fetch_lunar_heightmap(
     if cached is not None:
         return cached
 
+    return await single_flight(
+        key, lambda: _fetch_lunar_heightmap(lat, lon, size_km, res, service, key)
+    )
+
+
+async def _fetch_lunar_heightmap(
+    lat: float,
+    lon: float,
+    size_km: float,
+    res: int,
+    service: dict[str, Any],
+    key: str,
+) -> dict[str, Any]:
     from app.dem_window_source import find_cached_dem_window
 
-    dem_window = await find_cached_dem_window(lat, lon, service)
+    # The window must cover the whole square (half diagonal + one DEM pixel), otherwise
+    # a point near the window edge used to fail with OUT_OF_DEM_COVERAGE.
+    dem_window = await find_cached_dem_window(
+        lat, lon, service, required_margin_m=size_km * 1000 / math.sqrt(2) + 500
+    )
     if dem_window is not None:
         raster_bytes = dem_window.content
     else:

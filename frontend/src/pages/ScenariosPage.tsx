@@ -8,6 +8,7 @@ import { SITES } from '../data/sites';
 import { defaultHorizonModel, siteRef } from '../lib/requests';
 import { formatLat, formatLon } from '../lib/coords';
 import './ScenariosPage.css';
+import { StepLoader } from '../components/StepLoader';
 
 const WINDOW_DAYS = 30;
 const STEP_MIN = 10;
@@ -364,20 +365,16 @@ function combinedSegments(w: { sun: DayWindow[]; earth: DayWindow[] }, total: nu
 }
 
 function RunningNote({ count }: { count: number }) {
-  const [s, setS] = useState(0);
-  useEffect(() => {
-    const t0 = Date.now();
-    const id = setInterval(() => setS((Date.now() - t0) / 1000), 500);
-    return () => clearInterval(id);
-  }, []);
   return (
-    <div className="dates-loading" aria-live="polite">
-      <div className="progress" aria-hidden="true">
-        <span />
-      </div>
-      <span className="mono muted">
-        Running {count} simulations in parallel… {s.toFixed(0)} s (new sites download terrain first)
-      </span>
-    </div>
+    <StepLoader
+      title={`Comparing ${count} scenarios`}
+      steps={[
+        { at: 0, label: 'Loading terrain for each site' },
+        { at: 8, label: 'Fetching Sun and Earth positions from JPL Horizons' },
+        { at: 20, label: `Running ${count} simulations in parallel` },
+        { at: 45, label: 'Checking requirements and picking a recommendation' },
+      ]}
+      hint="New sites download terrain first; repeated comparisons are much faster."
+    />
   );
 }

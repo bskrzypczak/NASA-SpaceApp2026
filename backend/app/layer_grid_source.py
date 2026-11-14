@@ -5,7 +5,7 @@ from typing import Any
 from app.heightmap_source import _heightmap_projected_grid
 from app.persistent_cache import get as get_persisted_cache
 from app.persistent_cache import set as set_persisted_cache
-from app.sources import PSR_RASTER_URL, _upstream_error
+from app.sources import PSR_RASTER_URL, _upstream_error, gdal_http_env, run_remote_raster
 
 PSR_RASTER_VERSION = "LPSR_80S_20MPP_ADJ"
 PSR_GRID_SOURCE = "NASA GSFC PGDA LPSR PSR map"
@@ -143,9 +143,13 @@ def _sample_psr_dataset(
             ~np.ma.getmaskarray(sampled)
             & np.isfinite(sample_data)
         )
-        values[in_bounds_indices[sample_valid]] = (
-            sample_data[sample_valid] > 0.5
-        ).astype(np.float64)
+        # The PGDA PSR raster only marks PSR pixels; everything else inside the
+        # 80–90°S map is NoData. Treating that NoData as "unknown" turned the whole
+        # map into null and made /nearby exclude every cell. Inside the raster
+        # extent NoData therefore means "not PSR" (same as the /terrain/point read).
+        psr_values = np.zeros(sample_data.shape, dtype=np.float64)
+        psr_values[sample_valid] = (sample_data[sample_valid] > 0.5).astype(np.float64)
+        values[in_bounds_indices] = psr_values
     return values.reshape(np.shape(projected_x))
 
 
@@ -167,13 +171,7 @@ def _read_psr_grid_values(
         "south-polar",
     )
     try:
-        with rasterio.Env(
-            GDAL_HTTP_USERAGENT="HORIZON-backend/0.1",
-            GDAL_HTTP_VERSION="1.1",
-            CPL_VSIL_CURL_USE_HEAD="NO",
-            GDAL_DISABLE_READDIR_ON_OPEN="EMPTY_DIR",
-            CPL_VSIL_CURL_ALLOWED_EXTENSIONS=".TIF",
-        ):
+        with rasterio.Env(**gdal_http_env()):
             with rasterio.open(PSR_RASTER_URL) as dataset:
                 sampled = _sample_psr_dataset(
                     dataset,
@@ -196,7 +194,7 @@ async def fetch_psr_grid(
     lat: float, lon: float, size_km: float, res: int
 ) -> dict[str, Any]:
     key = (
-        f"layergrid:psr:{PSR_RASTER_VERSION}:{lat:.5f}:{lon:.5f}:"
+        f"layergrid:psr-v2:{PSR_RASTER_VERSION}:{lat:.5f}:{lon:.5f}:"
         f"{size_km:g}:{res}"
     )
     cached = get_persisted_cache(key)
@@ -204,7 +202,7 @@ async def fetch_psr_grid(
         return cached[0]
 
     try:
-        values = await asyncio.to_thread(
+        values = await run_remote_raster(
             _read_psr_grid_values,
             lat,
             lon,

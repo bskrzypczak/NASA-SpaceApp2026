@@ -24,6 +24,10 @@ from app.sources import (
     _fetch_dem_sample,
     _fetch_permanent_shadow,
     _get_moon_trek_response,
+    MOON_TREK_LANE_LIMITS,
+    PARTIAL_RESULT_TTL,
+    _sample_dem_window,
+    single_flight,
     _get_json,
     _north_polar_stereographic_xy,
     _parse_horizons_response,
@@ -88,7 +92,8 @@ def test_moon_trek_retries_transient_connection_failures(failure_type):
     assert attempts == 2
 
 
-def test_moon_trek_limits_concurrent_requests_to_two():
+@pytest.mark.parametrize("lane", ["light", "bulk"])
+def test_moon_trek_limits_concurrent_requests_per_lane(lane):
     active_requests = 0
     max_active_requests = 0
 
@@ -107,15 +112,115 @@ def test_moon_trek_limits_concurrent_requests_to_two():
             await asyncio.gather(
                 *(
                     _get_moon_trek_response(
-                        client, "https://example.test/data", {}
+                        client, "https://example.test/data", {}, lane=lane
                     )
-                    for _ in range(5)
+                    for _ in range(8)
                 )
             )
 
     asyncio.run(fetch_all())
 
-    assert max_active_requests == 2
+    assert max_active_requests == MOON_TREK_LANE_LIMITS[lane]
+
+
+def test_bulk_dem_export_does_not_block_light_requests():
+    """A slow 38 MB window export must not delay point-elevation requests."""
+    order = []
+
+    async def handle_request(request):
+        if "bulk" in str(request.url):
+            await asyncio.sleep(0.2)
+        order.append(str(request.url).rsplit("/", 1)[1])
+        return httpx.Response(200, json={"ok": True})
+
+    async def run():
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handle_request)
+        ) as client:
+            bulk = asyncio.ensure_future(
+                _get_moon_trek_response(client, "https://example.test/bulk", {}, lane="bulk")
+            )
+            await asyncio.sleep(0)
+            await _get_moon_trek_response(client, "https://example.test/light", {})
+            await bulk
+
+    asyncio.run(run())
+
+    assert order == ["light", "bulk"]
+
+
+def test_single_flight_shares_one_call_between_concurrent_callers():
+    calls = 0
+
+    async def work():
+        nonlocal calls
+        calls += 1
+        await asyncio.sleep(0.01)
+        return {"value": 42}
+
+    async def run():
+        return await asyncio.gather(*(single_flight("k", work) for _ in range(5)))
+
+    results = asyncio.run(run())
+
+    assert calls == 1
+    assert all(result == {"value": 42} for result in results)
+
+
+def test_terrain_point_keeps_elevation_when_psr_and_neighbours_fail(monkeypatch):
+    async def no_window(*_args, **_kwargs):
+        return None
+
+    async def sample(_client, _service, lat, lon):
+        if (lat, lon) == (-88.1, 21.3):
+            return 1500.0
+        raise HTTPException(status_code=504, detail={"code": "TIMEOUT"})
+
+    async def failing_shadow(_lat, _lon):
+        raise HTTPException(status_code=504, detail={"code": "TIMEOUT"})
+
+    cached = {}
+    monkeypatch.setattr("app.dem_window_source.find_cached_dem_window", no_window)
+    monkeypatch.setattr("app.sources._fetch_dem_sample", sample)
+    monkeypatch.setattr("app.sources._fetch_permanent_shadow", failing_shadow)
+    monkeypatch.setattr("app.sources._cache_get", lambda _key: None)
+    monkeypatch.setattr(
+        "app.sources._cache_set",
+        lambda key, value, ttl, **_kwargs: cached.update({"ttl": ttl}),
+    )
+
+    result = asyncio.run(fetch_lunar_elevation(-88.1, 21.3))
+
+    assert result["elevationM"] == 1500.0
+    assert result["slopeDeg"] is None
+    assert result["inPermanentShadow"] is None
+    assert result["complete"] is False
+    assert cached["ttl"] == PARTIAL_RESULT_TTL
+
+
+def test_cached_global_window_is_sampled_in_degrees():
+    """Regression: global (non-polar) windows were sampled with north-polar metres."""
+    np = pytest.importorskip("numpy")
+    rasterio = pytest.importorskip("rasterio")
+    from rasterio.io import MemoryFile
+    from rasterio.transform import from_origin
+
+    data = np.arange(100, dtype="float32").reshape(10, 10)
+    with MemoryFile() as memory_file:
+        with memory_file.open(
+            driver="GTiff", width=10, height=10, count=1, dtype="float32",
+            transform=from_origin(20.0, 5.0, 1.0, 1.0),
+        ) as dataset:
+            dataset.write(data, 1)
+        content = memory_file.read()
+
+    result = _sample_dem_window(
+        content,
+        DEM_SERVICES["global"],
+        {"center": (0.5, 24.5)},
+    )
+
+    assert result["center"] == float(data[4, 4])
 
 
 def test_slope_uses_central_difference_and_returns_degrees():
@@ -425,7 +530,7 @@ def test_terrain_point_samples_cached_dem_window_without_moon_trek_calls(
 ):
     observed = {}
 
-    async def fake_window(lat, lon, service):
+    async def fake_window(lat, lon, service, **_kwargs):
         observed["window"] = (lat, lon, service)
         return SimpleNamespace(content=b"cached-dem")
 
@@ -476,7 +581,7 @@ def test_heightmap_reuses_cached_dem_window(monkeypatch):
         "heightsM": [[0.0] * 16 for _ in range(16)],
     }
 
-    async def fake_window(lat, lon, service):
+    async def fake_window(lat, lon, service, **_kwargs):
         observed["window"] = (lat, lon, service)
         return SimpleNamespace(content=b"cached-dem")
 

@@ -9,6 +9,7 @@ from app.sources import (
     MOON_RADIUS_M,
     _dem_service_for_latitude,
     _get_moon_trek_response,
+    single_flight,
     _north_polar_stereographic_xy,
     _south_polar_stereographic_xy,
     _upstream_error,
@@ -156,9 +157,27 @@ async def fetch_dem_window(
     tile_x = math.floor(projected_x / tile_size)
     tile_y = math.floor(projected_y / tile_size)
     key = _window_key(selected_service, tile_x, tile_y)
+    # One download per window even if a simulation, /horizon and /nearby ask at once.
+    return await single_flight(
+        f"demwindow:{key}",
+        lambda: _download_dem_window(selected_service, projection, tile_x, tile_y, tile_size, key),
+    )
+
+
+async def _download_dem_window(
+    selected_service: dict[str, Any],
+    projection: str,
+    tile_x: int,
+    tile_y: int,
+    tile_size: float,
+    key: str,
+) -> DemWindow:
+    cached = await read_dem_window(key)
     center_x = (tile_x + 0.5) * tile_size
     center_y = (tile_y + 0.5) * tile_size
     half_size = DEM_WINDOW_HALF_SIZE_M
+    if cached is not None:
+        return DemWindow(key=key, content=cached, center_x=center_x, center_y=center_y, half_size_m=half_size)
 
     if projection == "geographic":
         latitude_radius = math.degrees(half_size / MOON_RADIUS_M)
@@ -197,7 +216,9 @@ async def fetch_dem_window(
     async with httpx.AsyncClient(
         timeout=httpx.Timeout(90.0, connect=15.0)
     ) as client:
-        response = await _get_moon_trek_response(client, export_url, params)
+        response = await _get_moon_trek_response(
+            client, export_url, params, lane="bulk"
+        )
 
     if not response.content.startswith((b"II*\x00", b"MM\x00*")):
         raise _upstream_error("The lunar DEM service returned an invalid TIFF.")

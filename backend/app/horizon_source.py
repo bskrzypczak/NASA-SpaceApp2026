@@ -13,6 +13,7 @@ from app.sources import (
     _north_polar_stereographic_xy,
     _south_polar_stereographic_xy,
     _upstream_error,
+    single_flight,
 )
 
 HORIZON_CACHE_TTL = 24 * 60 * 60
@@ -256,7 +257,19 @@ async def fetch_horizon(
     cached = _cache_get(key)
     if cached is not None:
         return cached
+    return await single_flight(
+        key, lambda: _fetch_horizon(lat, lon, height_m, bin_deg, service, key)
+    )
 
+
+async def _fetch_horizon(
+    lat: float,
+    lon: float,
+    height_m: float,
+    bin_deg: float,
+    service: dict[str, Any],
+    key: str,
+) -> dict[str, Any]:
     from app.dem_window_source import fetch_dem_window
 
     dem_window = await fetch_dem_window(lat, lon, service)

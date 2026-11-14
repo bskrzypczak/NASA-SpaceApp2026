@@ -1,14 +1,25 @@
 import { useRef, useState } from 'react';
 import { ImageryView, type ImageryApi } from './ImageryView';
-import { TerrainView } from './TerrainView';
+import { TerrainView, type HoverCell } from './TerrainView';
 import { useApi } from '../../hooks/useApi';
-import { apiMode, getHeightmap, getLayers } from '../../api/client';
-import type { LayerId } from '../../api/types';
+import { apiMode, getHeightmap, getLayerGrid, getLayers, layerHasGrid } from '../../api/client';
+import type { LayerGrid, LayerId } from '../../api/types';
+import type { ApiState } from '../../hooks/useApi';
+import { describeCell, gridIsEmpty } from '../../lib/layers';
 import { formatLat, formatLon, type LatLon } from '../../lib/coords';
 import './site-map.css';
 
 type View = 'imagery' | 'terrain';
 const TERRAIN_SIZES_KM = [5, 10, 20, 40];
+/** Heightmap and layer grids must use the same res to line up pixel for pixel. */
+const GRID_RES = 256;
+const OVERLAY_ORDER = ['illumination', 'earth-visibility', 'psr', 'slope'] as const;
+type OverlayId = (typeof OVERLAY_ORDER)[number];
+
+/** One overlay grid; fetched only while the layer is on (Terrain view). */
+function useLayerGrid(id: LayerId, on: boolean, lat: number, lon: number, sizeKm: number) {
+  return useApi((signal) => (on ? getLayerGrid(id, lat, lon, sizeKm, GRID_RES, signal) : Promise.resolve(null)), [on, lat, lon, sizeKm], { debounceMs: 300 });
+}
 
 /** Pick a round scale-bar length that is ~90–160 px long. */
 function scaleBar(viewHeightKm: number, containerPx: number) {
@@ -24,16 +35,51 @@ export function SiteMap({ lat, lon, onPick, hidePinLabel = false }: LatLon & { o
   const [sizeKm, setSizeKm] = useState(20);
   const [viewKm, setViewKm] = useState(30);
   const [hover, setHover] = useState<LatLon | null>(null);
-  const [hoverElev, setHoverElev] = useState<number | null>(null);
+  const [hoverCell, setHoverCell] = useState<HoverCell | null>(null);
   const [activeLayers, setActiveLayers] = useState<Partial<Record<LayerId, boolean>>>({});
   const imageryApi = useRef<ImageryApi | null>(null);
   const boxRef = useRef<HTMLDivElement>(null);
 
   const layers = useApi((signal) => getLayers(signal), []);
   const heightmap = useApi(
-    (signal) => (view === 'terrain' ? getHeightmap(lat, lon, sizeKm, 256, signal) : Promise.resolve(null)),
+    (signal) => (view === 'terrain' ? getHeightmap(lat, lon, sizeKm, GRID_RES, signal) : Promise.resolve(null)),
     [view, lat, lon, sizeKm],
+    { debounceMs: 300 },
   );
+  const isOn = (id: LayerId) => view === 'terrain' && !!activeLayers[id];
+  // Fixed call order (same 4 hooks every render). Draw order: averages first, hazards on top.
+  const gridState: Record<OverlayId, ApiState<LayerGrid | null>> = {
+    illumination: useLayerGrid('illumination', isOn('illumination'), lat, lon, sizeKm),
+    'earth-visibility': useLayerGrid('earth-visibility', isOn('earth-visibility'), lat, lon, sizeKm),
+    psr: useLayerGrid('psr', isOn('psr'), lat, lon, sizeKm),
+    slope: useLayerGrid('slope', isOn('slope'), lat, lon, sizeKm),
+  };
+  const overlays = OVERLAY_ORDER.map((id) => (isOn(id) ? gridState[id].data : null)).filter((g): g is LayerGrid => !!g);
+  const psrOn = isOn('psr');
+  const psr = gridState.psr;
+
+  function toggleLayer(id: LayerId) {
+    const next = !activeLayers[id];
+    setActiveLayers((a) => ({ ...a, [id]: next }));
+    // Overlays are aligned with the LOLA heightmap, so they live on the Terrain view.
+    if (next && view !== 'terrain') setView('terrain');
+  }
+
+  function layerStatus(id: LayerId, fallback: string): string {
+    const st = gridState[id as OverlayId];
+    if (!activeLayers[id] || view !== 'terrain' || !st) return fallback;
+    if (st.loading) return 'loading…';
+    if (st.error) return 'error';
+    if (st.data && gridIsEmpty(st.data)) return 'no data here';
+    return fallback;
+  }
+
+  const hoverText = hoverCell
+    ? [
+        `${hoverCell.elevationM >= 0 ? '+' : ''}${Math.round(hoverCell.elevationM)} m vs. landing point`,
+        ...overlays.map((g) => describeCell(g, hoverCell.row, hoverCell.col)).filter(Boolean),
+      ].join(' · ')
+    : null;
 
   const heightPx = boxRef.current?.clientHeight ?? 600;
   const bar = scaleBar(view === 'imagery' ? viewKm : sizeKm, view === 'imagery' ? heightPx : Math.min(heightPx, boxRef.current?.clientWidth ?? heightPx));
@@ -51,7 +97,7 @@ export function SiteMap({ lat, lon, onPick, hidePinLabel = false }: LatLon & { o
       {view === 'imagery' ? (
         <ImageryView lat={lat} lon={lon} apiRef={imageryApi} onViewHeightKm={setViewKm} onHover={setHover} onPick={onPick} hidePinLabel={hidePinLabel} />
       ) : heightmap.data ? (
-        <TerrainView data={heightmap.data} onHoverElevation={setHoverElev} />
+        <TerrainView data={heightmap.data} overlays={overlays} onHover={setHoverCell} />
       ) : (
         <div className="site-map__empty">
           {heightmap.loading ? (
@@ -111,9 +157,7 @@ export function SiteMap({ lat, lon, onPick, hidePinLabel = false }: LatLon & { o
             ? hover
               ? `${formatLat(hover.lat, 3)} · ${formatLon(hover.lon, 3)}`
               : 'Drag to pan · scroll to zoom · click to move the pin'
-            : hoverElev !== null
-              ? `${hoverElev >= 0 ? '+' : ''}${Math.round(hoverElev)} m vs. landing point`
-              : `${sizeKm} km × ${sizeKm} km · hover for elevation`}
+            : (hoverText ?? `${sizeKm} km × ${sizeKm} km · hover for elevation`)}
         </span>
       </div>
 
@@ -121,23 +165,30 @@ export function SiteMap({ lat, lon, onPick, hidePinLabel = false }: LatLon & { o
       <fieldset className="site-map__hud site-map__hud--br layers-panel">
         <legend className="eyebrow">Map layers</legend>
         {(layers.data ?? []).map((l) => {
-          const available = !!l.tileUrl;
+          const available = layerHasGrid(l);
+          const status = layerStatus(l.id, l.source);
           return (
             <label key={l.id} className={`layers-panel__row${available ? '' : ' is-disabled'}`}>
               <input
                 type="checkbox"
                 disabled={!available}
                 checked={!!activeLayers[l.id]}
-                onChange={() => setActiveLayers((a) => ({ ...a, [l.id]: !a[l.id] }))}
+                onChange={() => toggleLayer(l.id)}
               />
               <span className={`layer-swatch layer-swatch--${l.id}`} aria-hidden="true" />
               <span style={{ flex: 1 }}>{l.name}</span>
-              <span className="mono muted" style={{ fontSize: 11 }}>
-                {available ? l.source : 'coming soon'}
+              <span className={`mono ${status === 'error' ? 'error' : 'muted'}`} style={{ fontSize: 11 }} title={gridState[l.id as OverlayId]?.error?.message}>
+                {available ? status : 'coming soon'}
               </span>
             </label>
           );
         })}
+        {view === 'imagery' && <span className="layers-panel__note">Layers draw on the Terrain view (LOLA grid).</span>}
+        {(psrOn && psr.data && gridIsEmpty(psr.data)) && <span className="layers-panel__note">PSR map covers 80–90°S only.</span>}
+        {(['illumination', 'earth-visibility'] as const).some((id) => isOn(id) && gridState[id].data && gridIsEmpty(gridState[id].data!)) && (
+          <span className="layers-panel__note">Sunlight and Earth maps cover 65–90° N/S only.</span>
+        )}
+        {(isOn('illumination') || isOn('earth-visibility')) && <span className="layers-panel__note">Stronger colour = more time in view (18.6-yr average).</span>}
         <span className="muted" style={{ fontSize: 12 }}>
           Backend: {apiMode}
         </span>

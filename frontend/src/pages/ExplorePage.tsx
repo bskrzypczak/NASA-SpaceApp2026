@@ -6,14 +6,14 @@ import { useSelection } from '../store/selection';
 import { SITES, FEATURED_IDS } from '../data/sites';
 import { toQuery, type LatLon } from '../lib/coords';
 import { useApi } from '../hooks/useApi';
-import { getTerrainPoint } from '../api/client';
+import { getQuickTerrain } from '../api/client';
 
 /** Screen 1 — pick a point on the Moon. */
 export function ExplorePage() {
   const navigate = useNavigate();
   const { lat, lon, selectSite } = useSelection();
   const featured = SITES.filter((s) => FEATURED_IDS.includes(s.id));
-  const terrain = useApi((signal) => getTerrainPoint(lat, lon, signal), [lat, lon]);
+  const terrain = useApi((signal) => getQuickTerrain(lat, lon, signal), [lat, lon], { debounceMs: 300 });
   const elevationM = terrain.loading ? undefined : (terrain.data?.elevationM ?? null);
 
   function goToSite(point: LatLon) {

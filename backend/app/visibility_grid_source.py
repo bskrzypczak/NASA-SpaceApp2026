@@ -5,7 +5,7 @@ from typing import Any
 from app.heightmap_source import _heightmap_projected_grid
 from app.persistent_cache import get as get_persisted_cache
 from app.persistent_cache import set as set_persisted_cache
-from app.sources import MOON_RADIUS_KM, _upstream_error
+from app.sources import MOON_RADIUS_KM, _upstream_error, gdal_http_env, run_remote_raster
 
 VISIBILITY_GRID_CACHE_TTL = 24 * 60 * 60
 VISIBILITY_GRID_SOURCE = "NASA GSFC PGDA LOLA Lunar Polar Illumination"
@@ -149,13 +149,7 @@ def _read_visibility_grid_values(
         product["projection"],
     )
     try:
-        with rasterio.Env(
-            GDAL_HTTP_USERAGENT="HORIZON-backend/0.1",
-            GDAL_HTTP_VERSION="1.1",
-            CPL_VSIL_CURL_USE_HEAD="NO",
-            GDAL_DISABLE_READDIR_ON_OPEN="EMPTY_DIR",
-            CPL_VSIL_CURL_ALLOWED_EXTENSIONS=".TIF",
-        ):
+        with rasterio.Env(**gdal_http_env()):
             with rasterio.open(f"/vsicurl/{product['url']}") as dataset:
                 return _sample_visibility_dataset(
                     dataset,
@@ -191,7 +185,7 @@ async def fetch_visibility_grid(
         values = [[None] * res for _ in range(res)]
     else:
         try:
-            values = await asyncio.to_thread(
+            values = await run_remote_raster(
                 _read_visibility_grid_values,
                 lat,
                 lon,
@@ -244,7 +238,7 @@ async def fetch_visibility_point(
         value = None
     else:
         try:
-            values = await asyncio.to_thread(
+            values = await run_remote_raster(
                 _read_visibility_grid_values,
                 lat,
                 lon,

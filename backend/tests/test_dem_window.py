@@ -18,7 +18,7 @@ def test_dem_window_is_cached_on_disk_and_reused_for_nearby_coordinates(
     )
     dem_window_cache._memory_cache.clear()
 
-    async def fake_get_response(_client, url, params):
+    async def fake_get_response(_client, url, params, **_kwargs):
         observed.append((url, params))
         return httpx.Response(200, content=b"II*\x00valid-window")
 

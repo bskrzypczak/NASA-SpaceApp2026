@@ -7,6 +7,7 @@ import { useScenarios } from '../store/scenarios';
 import { defaultHorizonModel, siteRef } from '../lib/requests';
 import { toQuery } from '../lib/coords';
 import './CompareDatesPage.css';
+import { StepLoader } from '../components/StepLoader';
 
 /* ---------- date helpers (all UTC, "YYYY-MM-DD") ---------- */
 const iso = (d: Date) => d.toISOString().slice(0, 10);
@@ -401,20 +402,17 @@ function YearStrips({ data, yourDate, onPickMonth }: { data: CalendarResult; you
 }
 
 function LoadingNote({ what }: { what: string }) {
-  const [s, setS] = useState(0);
-  useEffect(() => {
-    const t0 = Date.now();
-    const id = setInterval(() => setS((Date.now() - t0) / 1000), 500);
-    return () => clearInterval(id);
-  }, []);
   return (
-    <div className="dates-loading" aria-live="polite">
-      <div className="progress" aria-hidden="true">
-        <span />
-      </div>
-      <span className="mono muted">
-        Computing {what}… {s.toFixed(0)} s (one simulation per day — the first run for a site downloads terrain)
-      </span>
-    </div>
+    <StepLoader
+      title={`Scoring every landing day · ${what}`}
+      steps={[
+        { at: 0, label: 'Loading terrain around the site (first run downloads a 340 km LOLA map)' },
+        { at: 10, label: 'Fetching Sun and Earth positions from JPL Horizons' },
+        { at: 30, label: 'Simulating each landing day: sunlight, Earth view, battery' },
+        { at: 75, label: 'Ranking days and grouping them by month' },
+      ]}
+      hint="Usually 1–2 minutes for a new site or range; repeat views are cached."
+      slowAfterS={150}
+    />
   );
 }

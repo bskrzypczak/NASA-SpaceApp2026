@@ -67,7 +67,7 @@ def test_slope_grid_returns_null_when_a_neighborhood_contains_nodata():
     assert all(value is None for row in grid["values"] for value in row)
 
 
-def test_psr_grid_sampling_preserves_orientation_and_maps_nodata_to_null():
+def test_psr_grid_sampling_preserves_orientation_and_treats_nodata_inside_map_as_not_psr():
     raster = np.asarray(
         [
             [1, 0, 1],
@@ -92,7 +92,8 @@ def test_psr_grid_sampling_preserves_orientation_and_maps_nodata_to_null():
             dataset.write(raster, 1)
             values = _sample_psr_dataset(dataset, projected_x, projected_y)
 
-    np.testing.assert_equal(values, [[1.0, 0.0, np.nan, np.nan]])
+    # NoData inside the raster = not PSR (0); outside the raster extent = unknown (NaN → null).
+    np.testing.assert_equal(values, [[1.0, 0.0, 0.0, np.nan]])
 
 
 def test_slope_grid_endpoint_reuses_heightmap_coordinates_and_resolution(

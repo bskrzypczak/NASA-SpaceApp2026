@@ -1,8 +1,12 @@
-import type { ApiErrorBody, ApiSite, CalendarRequest, CalendarResult, ScenarioCompareRequest, ScenarioCompareResponse, Heightmap, HorizonProfile, LayerInfo, SimulationRequest, SimulationResult, TerrainPoint } from './types';
+import { slopeFromHeights } from '../lib/layers';
+import type { NearbyRequest, NearbyResponse, ApiSite, CalendarRequest, CalendarResult, ScenarioCompareRequest, ScenarioCompareResponse, Heightmap, HorizonProfile, LayerGrid, LayerId, LayerInfo, SimulationRequest, SimulationResult, TerrainPoint } from './types';
 import { SITES } from '../data/sites';
-import { mockCalendar, mockCompare, mockHeightmap, mockHorizon, mockSimulation, mockTerrainPoint } from './mocks';
+import { mockCalendar, mockCompare, mockHeightmap, mockHorizon, mockSimulation, mockTerrainPoint, mockLayerGrid, mockNearby } from './mocks';
 
-const BASE = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '');
+import { ApiError, BASE, TIMEOUT, get, post } from './http';
+
+export { ApiError, clearApiCache } from './http';
+
 const USE_MOCKS = import.meta.env.VITE_USE_MOCKS === 'true';
 
 /**
@@ -12,59 +16,56 @@ const USE_MOCKS = import.meta.env.VITE_USE_MOCKS === 'true';
  */
 export const apiMode: 'live' | 'mock' | 'offline' = BASE ? 'live' : USE_MOCKS ? 'mock' : 'offline';
 
-export class ApiError extends Error {
-  constructor(public code: string, message: string, public status?: number, public field?: string) {
-    super(message);
-  }
-}
-
-async function readError(res: Response): Promise<ApiError> {
-  let body: ApiErrorBody | null = null;
-  try {
-    body = (await res.json()) as ApiErrorBody;
-  } catch {
-    /* not JSON */
-  }
-  return new ApiError(body?.error.code ?? `HTTP_${res.status}`, body?.error.message ?? res.statusText, res.status, body?.error.field);
-}
-
-async function post<T>(path: string, payload: unknown, signal?: AbortSignal): Promise<T> {
-  const res = await fetch(new URL(BASE + path, window.location.origin), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-    signal,
-  });
-  if (!res.ok) throw await readError(res);
-  return (await res.json()) as T;
-}
-
-async function get<T>(path: string, params: Record<string, string | number>, signal?: AbortSignal): Promise<T> {
-  const url = new URL(BASE + path, window.location.origin);
-  for (const [k, v] of Object.entries(params)) url.searchParams.set(k, String(v));
-  const res = await fetch(url, { signal });
-  if (!res.ok) {
-    let body: ApiErrorBody | null = null;
-    try {
-      body = (await res.json()) as ApiErrorBody;
-    } catch {
-      /* not JSON */
-    }
-    throw new ApiError(body?.error.code ?? `HTTP_${res.status}`, body?.error.message ?? res.statusText, res.status, body?.error.field);
-  }
-  return (await res.json()) as T;
-}
-
 export async function getTerrainPoint(lat: number, lon: number, signal?: AbortSignal): Promise<TerrainPoint | null> {
-  if (apiMode === 'live') return get<TerrainPoint>('/terrain/point', { lat, lon }, signal);
+  if (apiMode === 'live') return get<TerrainPoint>('/terrain/point', { lat, lon }, { signal, timeoutMs: TIMEOUT.terrain, cacheIf: (p) => p.complete !== false });
   if (apiMode === 'mock') return mockTerrainPoint(lat, lon);
   return null;
+}
+
+/** Elevation first, fast: one small DEM export instead of /terrain/point's 5 samples + PSR lookup. */
+export interface QuickTerrain {
+  elevationM: number;
+  /** Approximate (5 km / 16 px grid, ~300 m cells). /terrain/point gives the precise value. */
+  slopeDeg: number | null;
+  demResolutionM: number | null;
+  source: 'heightmap' | 'point';
+}
+
+const QUICK_SIZE_KM = 5;
+const QUICK_RES = 16;
+
+export async function getQuickTerrain(lat: number, lon: number, signal?: AbortSignal): Promise<QuickTerrain | null> {
+  if (apiMode === 'offline') return null;
+  try {
+    const hm =
+      apiMode === 'live'
+        ? await get<Heightmap>('/terrain/heightmap', { lat, lon, sizeKm: QUICK_SIZE_KM, res: QUICK_RES, format: 'json' }, { signal, timeoutMs: TIMEOUT.terrain })
+        : mockHeightmap(lat, lon, QUICK_SIZE_KM, QUICK_RES);
+    if (hm.originElevationM != null) {
+      return { elevationM: hm.originElevationM, slopeDeg: centreSlope(hm.heightsM, QUICK_SIZE_KM), demResolutionM: hm.demResolutionM ?? null, source: 'heightmap' };
+    }
+  } catch (e) {
+    if ((e as Error).name === 'AbortError') throw e;
+    // Outside DEM coverage or the backend is timing out: /terrain/point would fail the same way.
+    if (e instanceof ApiError && (e.code === 'OUT_OF_DEM_COVERAGE' || e.code === 'CLIENT_TIMEOUT' || e.status === 504)) throw e;
+    console.warn('Quick heightmap failed, falling back to /terrain/point', e);
+  }
+  const p = await getTerrainPoint(lat, lon, signal);
+  return p?.elevationM != null ? { elevationM: p.elevationM, slopeDeg: p.slopeDeg, demResolutionM: p.demResolutionM, source: 'point' } : null;
+}
+
+/** Mean Horn slope of the 4 cells around the grid centre (the landing point sits on their shared corner). */
+function centreSlope(heightsM: number[][], sizeKm: number): number | null {
+  const g = slopeFromHeights(heightsM, sizeKm);
+  const m = heightsM.length / 2;
+  const vals = [g[m - 1]?.[m - 1], g[m - 1]?.[m], g[m]?.[m - 1], g[m]?.[m]].filter((v): v is number => v != null);
+  return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
 }
 
 export async function getHeightmap(lat: number, lon: number, sizeKm: number, res = 256, signal?: AbortSignal): Promise<Heightmap | null> {
   if (apiMode === 'live') {
     try {
-      return await get<Heightmap>('/terrain/heightmap', { lat, lon, sizeKm, res, format: 'json' }, signal);
+      return await get<Heightmap>('/terrain/heightmap', { lat, lon, sizeKm, res, format: 'json' }, { signal, timeoutMs: TIMEOUT.terrain });
     } catch (e) {
       // Endpoint not built yet on the backend → keep the UI usable, clearly labelled.
       if (e instanceof ApiError && e.status === 404) {
@@ -87,7 +88,7 @@ export async function getSites(signal?: AbortSignal): Promise<SitesResult> {
   const local: SitesResult = { items: SITES.map((s) => ({ ...s, coordsVerified: false })), source: 'local' };
   if (apiMode !== 'live') return local;
   try {
-    const res = await get<{ items: ApiSite[]; total: number }>('/sites', {}, signal);
+    const res = await get<{ items: ApiSite[]; total: number }>('/sites', {}, { signal });
     return { items: res.items, source: 'backend' };
   } catch (e) {
     if ((e as Error).name === 'AbortError') throw e;
@@ -104,10 +105,25 @@ export const DEFAULT_LAYERS: LayerInfo[] = [
   { id: 'slope', name: 'Slope > 10°', source: 'LOLA', tileUrl: null },
 ];
 
+/** Layers with a grid on the backend, used when /layers does not say so explicitly. */
+export const GRID_LAYERS: ReadonlySet<LayerId> = new Set<LayerId>(['illumination', 'earth-visibility', 'slope', 'psr']);
+
+export function layerHasGrid(l: LayerInfo): boolean {
+  if (apiMode === 'offline') return false;
+  return l.grid ?? GRID_LAYERS.has(l.id);
+}
+
+/** Overlay grid aligned 1:1 with getHeightmap(lat, lon, sizeKm, res). null = no backend. */
+export async function getLayerGrid(id: LayerId, lat: number, lon: number, sizeKm: number, res = 256, signal?: AbortSignal): Promise<LayerGrid | null> {
+  if (apiMode === 'live') return get<LayerGrid>(`/layers/${id}/grid`, { lat, lon, sizeKm, res }, { signal, timeoutMs: TIMEOUT.terrain });
+  if (apiMode === 'mock') return mockLayerGrid(id, lat, lon, sizeKm, res);
+  return null;
+}
+
 export async function getLayers(signal?: AbortSignal): Promise<LayerInfo[]> {
   if (apiMode !== 'live') return DEFAULT_LAYERS;
   try {
-    const res = await get<{ layers: LayerInfo[] }>('/layers', {}, signal);
+    const res = await get<{ layers: LayerInfo[] }>('/layers', {}, { signal });
     return DEFAULT_LAYERS.map((d) => res.layers.find((l) => l.id === d.id) ?? d);
   } catch (e) {
     if (e instanceof ApiError && e.status === 404) return DEFAULT_LAYERS; // endpoint not built yet
@@ -121,7 +137,7 @@ export async function getLayers(signal?: AbortSignal): Promise<LayerInfo[]> {
 export async function getHorizon(lat: number, lon: number, heightM = 2, signal?: AbortSignal): Promise<HorizonProfile | null> {
   if (apiMode === 'live') {
     try {
-      return await get<HorizonProfile>('/horizon', { lat, lon, heightM, binDeg: 0.5 }, signal);
+      return await get<HorizonProfile>('/horizon', { lat, lon, heightM, binDeg: 0.5 }, { signal, timeoutMs: TIMEOUT.horizon });
     } catch (e) {
       if (e instanceof ApiError && e.code === 'OUT_OF_DEM_COVERAGE') return null;
       throw e;
@@ -135,7 +151,7 @@ const mockStore = new Map<string, SimulationResult>();
 
 /** POST /simulations. The first run for a new site can take ~40 s on the backend (DEM download). */
 export async function createSimulation(req: SimulationRequest, signal?: AbortSignal): Promise<SimulationResult> {
-  if (apiMode === 'live') return post<SimulationResult>('/simulations', req, signal);
+  if (apiMode === 'live') return post<SimulationResult>('/simulations', req, { signal, timeoutMs: TIMEOUT.simulation, retries: 1 });
   if (apiMode === 'mock') {
     await new Promise((r) => setTimeout(r, 900)); // feel the loading state
     const res = mockSimulation(req);
@@ -147,7 +163,7 @@ export async function createSimulation(req: SimulationRequest, signal?: AbortSig
 
 /** GET /simulations/{id}. Results live in backend memory — 404 after a backend restart. */
 export async function getSimulation(id: string, signal?: AbortSignal): Promise<SimulationResult> {
-  if (apiMode === 'live') return get<SimulationResult>(`/simulations/${encodeURIComponent(id)}`, {}, signal);
+  if (apiMode === 'live') return get<SimulationResult>(`/simulations/${encodeURIComponent(id)}`, {}, { signal, timeoutMs: TIMEOUT.simulation });
   const hit = mockStore.get(id);
   if (hit) return hit;
   throw new ApiError('NOT_FOUND', 'Simulation not found (mock results are kept only until reload).', 404);
@@ -155,7 +171,7 @@ export async function getSimulation(id: string, signal?: AbortSignal): Promise<S
 
 /** POST /calendar — one score per landing day. Synchronous on the backend: a full year can take a while. */
 export async function getCalendar(req: CalendarRequest, signal?: AbortSignal): Promise<CalendarResult> {
-  if (apiMode === 'live') return post<CalendarResult>('/calendar', req, signal);
+  if (apiMode === 'live') return post<CalendarResult>('/calendar', req, { signal, timeoutMs: TIMEOUT.heavy });
   if (apiMode === 'mock') {
     await new Promise((r) => setTimeout(r, 500));
     return mockCalendar(req);
@@ -165,7 +181,7 @@ export async function getCalendar(req: CalendarRequest, signal?: AbortSignal): P
 
 /** POST /scenarios/compare — 2–4 simulations in parallel on the backend (can take tens of seconds). */
 export async function compareScenarios(req: ScenarioCompareRequest, signal?: AbortSignal): Promise<ScenarioCompareResponse> {
-  if (apiMode === 'live') return post<ScenarioCompareResponse>('/scenarios/compare', req, signal);
+  if (apiMode === 'live') return post<ScenarioCompareResponse>('/scenarios/compare', req, { signal, timeoutMs: TIMEOUT.heavy });
   if (apiMode === 'mock') {
     await new Promise((r) => setTimeout(r, 800));
     const res = mockCompare(req);
@@ -176,6 +192,16 @@ export async function compareScenarios(req: ScenarioCompareRequest, signal?: Abo
       mockStore.set(res.results[i].simulationId, { ...sim, id: res.results[i].simulationId });
     });
     return res;
+  }
+  throw new ApiError('BACKEND_OFFLINE', 'No backend configured. Set VITE_API_URL or VITE_USE_MOCKS=true in .env.local.');
+}
+
+/** POST /nearby — synchronous, simulates the centre + up to 4 points (can take a while on a cold cache). */
+export async function getNearby(req: NearbyRequest, signal?: AbortSignal): Promise<NearbyResponse> {
+  if (apiMode === 'live') return post<NearbyResponse>('/nearby', req, { signal, timeoutMs: TIMEOUT.heavy, retries: 1 });
+  if (apiMode === 'mock') {
+    await new Promise((r) => setTimeout(r, 900));
+    return mockNearby(req);
   }
   throw new ApiError('BACKEND_OFFLINE', 'No backend configured. Set VITE_API_URL or VITE_USE_MOCKS=true in .env.local.');
 }

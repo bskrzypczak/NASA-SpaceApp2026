@@ -278,7 +278,7 @@ export function SimulationPage() {
         </div>
         <div className="sim-stage__note mono">
           {view === '3d' ? `Vertical scale ×${VERTICAL_EXAGGERATION} · ` : 'True scale · '}
-          {realTerrain ? (horizon.loading ? 'loading terrain horizon…' : horizon.data ? `horizon ${horizon.data.demVersion}` : 'horizon unavailable') : 'flat horizon'} · ephemeris JPL Horizons
+          {realTerrain ? (horizon.loading ? 'loading terrain horizon…' : horizon.data ? `horizon ${horizon.data.demVersion}` : `horizon unavailable${horizon.error ? ` (${horizon.error.message})` : ''}`) : 'flat horizon'} · ephemeris JPL Horizons
         </div>
       </div>
 

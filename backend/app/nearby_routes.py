@@ -184,7 +184,7 @@ async def find_nearby(request: NearbyRequest) -> dict[str, Any]:
         is_excluded = (
             slope is None
             or slope > request.maxSlopeDeg
-            or psr is None
+            # psr None = outside the PSR map (e.g. north of 80°S): unknown, not unsafe.
             or psr == 1
         )
         excluded[row][col] = is_excluded

@@ -159,9 +159,12 @@ Query: `lat`, `lon` (wymagane).
   "demCoverage": true,
   "demResolutionM": 5,
   "inPermanentShadow": false,
+  "complete": true,
   "nearestSite": { "id": "connecting-ridge", "distanceKm": 0.0 }
 }
 ```
+
+- `complete: false` — wysokość jest, ale nachylenia lub PSR nie udało się pobrać (wolny Moon Trek / PGDA). Wtedy `slopeDeg` i/lub `inPermanentShadow` = `null`, a odpowiedź jest cache'owana tylko 60 s, żeby ponowienie mogło je uzupełnić. Błąd zwracamy tylko, gdy nie ma nawet wysokości w punkcie.
 
 Ma być **szybki (< 100 ms)** — wołany przy każdym kliknięciu w globus. Poza zasięgiem DEM: `demCoverage: false`, `elevationM` z globalnego modelu LOLA o niższej rozdzielczości albo `null`.
 
@@ -716,10 +719,22 @@ Domyślne wagi: `wP = 0.5`, `wC = 0.3`, `wN = 0.2`. **Front i backend muszą lic
 | Próbki DEM i efemerydy | SQLite (`backend/.cache/`) | współrzędne, wersja DEM i parametry zapytania |
 | Profile horyzontu | SQLite (`backend/.cache/`) | `lat, lon, heightM, binDeg, demVersion` |
 | Wycinki DEM Moon Trek | pliki GeoTIFF w `backend/.cache/dem-windows/`, maks. 4 przez 24 h | wersja źródła i kafel przestrzenny ~10 km |
-| Heightmapy | SQLite (`backend/.cache/`), maks. 4 | `lat, lon, sizeKm, res, demVersion` |
+| Heightmapy | SQLite (`backend/.cache/`), maks. 48 | `lat, lon, sizeKm, res, demVersion` |
 | Siatki PSR | SQLite (`backend/.cache/`) | `lat, lon, sizeKm, res, version` |
 | Symulacje | pamięć procesu (maks. 256) i SQLite (maks. 256) | hash znormalizowanego requestu → to samo `id`; TTL SQLite 24 h |
 | Kalendarz katalogu | JSON z wyprzedzeniem | `siteId, rok, preset` |
+
+### 6.1 Odporność na wolne źródła NASA (zaimplementowane)
+
+| Mechanizm | Gdzie | Po co |
+|---|---|---|
+| Dwa pasy do Moon Trek: `light` (4 równoległe) i `bulk` (1) | `sources._get_moon_trek_response(lane=…)` | eksport wycinka DEM 340 km (~38 MB) idzie pasem `bulk` i nie blokuje małych zapytań (wysokość punktu, małe heightmapy, siatki) |
+| `single_flight(key)` | `sources.py`; użyte w wycinku DEM, `/horizon`, heightmapie, `/terrain/point`, efemerydach | równoległe zapytania o to samo (symulacja + `/horizon` + `/nearby`, podwójny render frontu) robią **jedno** pobranie; rozłączenie klienta nie przerywa pracy innym |
+| Timeouty GDAL (`gdal_http_env()`) + `run_remote_raster()` (45 s) | PSR, siatki PSR i widoczności | odczyty `/vsicurl` z PGDA nie miały timeoutu i potrafiły zawiesić wątek na zawsze — razem z `/terrain/point` |
+| Częściowa odpowiedź `/terrain/point` | `sources._fetch_lunar_elevation` | błąd sąsiedniej próbki lub PSR nie kasuje wysokości (`complete: false`) |
+| Ponowienia | Moon Trek: 2× (`RemoteProtocolError`, `ReadTimeout`), Horizons: 1× | zerwane połączenia NASA zwykle przechodzą za drugim razem |
+| Siatka PSR: NoData = „nie PSR” | `layer_grid_source._sample_psr_dataset` | raster PGDA zawiera tylko piksele PSR; `null` tylko poza zasięgiem rastra. `/nearby` nie wyklucza komórek z `psr = null` |
+| Margines wycinka DEM dla heightmapy | `heightmap_source` | wycinek z cache musi pokrywać cały kwadrat (pół przekątnej + 500 m) — wcześniej punkt przy krawędzi dawał fałszywe `OUT_OF_DEM_COVERAGE` |
 
 - Odpowiedzi GET z `ETag` + `Cache-Control: public, max-age=86400` (dane się nie zmieniają).
 - Duże tablice w JSON są OK do ~5 MB; przy większych rozważ `gzip` (włączony na serwerze) albo zmniejszenie kroku.

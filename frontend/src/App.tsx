@@ -6,6 +6,7 @@ import { SitePage } from './pages/SitePage';
 import { SiteConfirmModal } from './pages/SiteConfirmModal';
 import { SimulationNewPage, SimulationPage } from './pages/SimulationPage';
 import { CompareDatesPage } from './pages/CompareDatesPage';
+import { NearbyPage } from './pages/NearbyPage';
 import { ScenariosPage } from './pages/ScenariosPage';
 
 function Layout() {
@@ -38,6 +39,7 @@ export default function App() {
         <Route path="site" element={<SitePage />}>
           <Route path="confirm" element={<SiteConfirmModal />} />
         </Route>
+        <Route path="nearby" element={<NearbyPage />} />
         <Route path="dates" element={<CompareDatesPage />} />
         <Route path="scenarios" element={<ScenariosPage />} />
         <Route path="simulation/new" element={<SimulationNewPage />} />

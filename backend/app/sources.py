@@ -23,6 +23,7 @@ MOON_RADIUS_KM = 1737.4
 MAX_CACHE_ENTRIES = 512
 HORIZONS_CACHE_TTL = 24 * 60 * 60
 DEM_CACHE_TTL = 24 * 60 * 60
+PARTIAL_RESULT_TTL = 60
 PSR_RASTER_URL = (
     "/vsicurl/https://pgda.gsfc.nasa.gov/data/LOLA_20mpp/"
     "LPSR_80S_20MPP_ADJ.TIF"
@@ -57,10 +58,72 @@ DEM_SERVICES = {
 
 _cache: dict[str, tuple[float, dict[str, Any]]] = {}
 _horizons_semaphore = asyncio.Semaphore(2)
-MOON_TREK_CONCURRENCY_LIMIT = 2
-_moon_trek_semaphore: asyncio.Semaphore | None = None
+# Moon Trek gets two independent lanes so a 38 MB DEM-window export never blocks
+# the small requests the UI waits for (point elevation, small heightmaps).
+MOON_TREK_LANE_LIMITS = {"light": 4, "bulk": 1}
+MOON_TREK_CONCURRENCY_LIMIT = MOON_TREK_LANE_LIMITS["light"]
+_moon_trek_semaphores: dict[str, asyncio.Semaphore] = {}
 _moon_trek_semaphore_loop: asyncio.AbstractEventLoop | None = None
 MOON_TREK_RETRIES = 2
+HORIZONS_RETRIES = 1
+
+# GDAL /vsicurl reads (PGDA PSR and visibility GeoTIFFs) had no timeout and could
+# hang a worker thread forever, which also stalled /terrain/point. Keep them bounded.
+GDAL_HTTP_TIMEOUT_S = 20
+REMOTE_RASTER_TIMEOUT_S = 45.0
+
+
+def gdal_http_env() -> dict[str, str]:
+    """Options for rasterio.Env around every remote (/vsicurl) raster read."""
+    return {
+        "GDAL_HTTP_USERAGENT": "HORIZON-backend/0.1",
+        "GDAL_HTTP_VERSION": "1.1",
+        "CPL_VSIL_CURL_USE_HEAD": "NO",
+        "GDAL_DISABLE_READDIR_ON_OPEN": "EMPTY_DIR",
+        "CPL_VSIL_CURL_ALLOWED_EXTENSIONS": ".TIF",
+        "GDAL_HTTP_TIMEOUT": str(GDAL_HTTP_TIMEOUT_S),
+        "GDAL_HTTP_CONNECTTIMEOUT": "10",
+        "GDAL_HTTP_MAX_RETRY": "2",
+        "GDAL_HTTP_RETRY_DELAY": "1",
+    }
+
+
+async def run_remote_raster(func: Any, *args: Any, timeout_s: float | None = None) -> Any:
+    """Run a blocking /vsicurl raster read in a thread, but never wait longer than timeout_s."""
+    try:
+        return await asyncio.wait_for(
+            asyncio.to_thread(func, *args), timeout_s or REMOTE_RASTER_TIMEOUT_S
+        )
+    except asyncio.TimeoutError as exc:
+        raise _upstream_error(
+            "The PGDA raster service timed out.", 504, cause=exc
+        ) from exc
+
+
+_in_flight: dict[str, asyncio.Future] = {}
+
+
+async def single_flight(key: str, factory: Any) -> Any:
+    """Run factory() once per key; concurrent callers with the same key share the result.
+
+    The work runs in its own task, so a caller that goes away (client closed the
+    request) does not cancel the download for everybody else.
+    """
+    existing = _in_flight.get(key)
+    if existing is not None and existing.get_loop() is asyncio.get_running_loop():
+        return await asyncio.shield(existing)
+
+    task = asyncio.ensure_future(factory())
+    _in_flight[key] = task
+
+    def _done(_task: asyncio.Future) -> None:
+        if _in_flight.get(key) is _task:
+            del _in_flight[key]
+        if not _task.cancelled():
+            _task.exception()  # mark as retrieved; callers re-raise it
+
+    task.add_done_callback(_done)
+    return await asyncio.shield(task)
 
 
 def _cache_get(key: str) -> dict[str, Any] | None:
@@ -177,18 +240,23 @@ async def _get_response(
 
 
 async def _get_moon_trek_response(
-    client: httpx.AsyncClient, url: str, params: dict[str, str]
+    client: httpx.AsyncClient,
+    url: str,
+    params: dict[str, str],
+    *,
+    lane: str = "light",
 ) -> httpx.Response:
-    global _moon_trek_semaphore, _moon_trek_semaphore_loop
+    """lane="bulk" for large DEM-window exports, "light" for everything else."""
+    global _moon_trek_semaphore_loop
     loop = asyncio.get_running_loop()
     if _moon_trek_semaphore_loop is not loop:
-        _moon_trek_semaphore = asyncio.Semaphore(
-            MOON_TREK_CONCURRENCY_LIMIT
-        )
+        _moon_trek_semaphores.clear()
+        for name, limit in MOON_TREK_LANE_LIMITS.items():
+            _moon_trek_semaphores[name] = asyncio.Semaphore(limit)
         _moon_trek_semaphore_loop = loop
-    semaphore = _moon_trek_semaphore
+    semaphore = _moon_trek_semaphores.get(lane)
     if semaphore is None:
-        raise RuntimeError("The Moon Trek request semaphore was not initialized.")
+        raise ValueError(f"Unknown Moon Trek lane: {lane}.")
     return await _get_response(
         client,
         url,
@@ -205,11 +273,15 @@ async def _get_json(
     params: dict[str, str],
     *,
     moon_trek: bool = False,
+    retries: int = 0,
+    service_name: str = "upstream data",
 ) -> dict[str, Any]:
     if moon_trek:
         response = await _get_moon_trek_response(client, url, params)
     else:
-        response = await _get_response(client, url, params)
+        response = await _get_response(
+            client, url, params, retries=retries, service_name=service_name
+        )
 
     try:
         payload = response.json()
@@ -295,6 +367,14 @@ async def _fetch_dem_sample(
     return value if math.isfinite(value) else None
 
 
+def _wrap_lon_to_window(lon: float, bounds: Any) -> float:
+    """Shift lon by ±360° so it falls inside a geographic window that crosses the antimeridian."""
+    for candidate in (lon, lon - 360.0, lon + 360.0):
+        if bounds.left <= candidate <= bounds.right:
+            return candidate
+    return lon
+
+
 def _sample_dem_window(
     content: bytes,
     service: dict[str, Any],
@@ -317,8 +397,12 @@ def _sample_dem_window(
                 for name, (lat, lon) in sample_points.items():
                     if service["projection"] == "south-polar":
                         x, y = _south_polar_stereographic_xy(lat, lon)
-                    else:
+                    elif service["projection"] == "north-polar":
                         x, y = _north_polar_stereographic_xy(lat, lon)
+                    else:
+                        # Global DEM windows are in degrees (lon, lat). Before this fix they
+                        # were sampled as north-polar metres → always out of bounds → null.
+                        x, y = _wrap_lon_to_window(lon, dataset.bounds), lat
                     row, col = dataset.index(x, y)
                     if not (0 <= row < dataset.height and 0 <= col < dataset.width):
                         result[name] = None
@@ -390,13 +474,7 @@ def _read_psr_raster_value(lat: float, lon: float) -> float | None:
 
     x, y = _south_polar_stereographic_xy(lat, lon)
     try:
-        with rasterio.Env(
-            GDAL_HTTP_USERAGENT="HORIZON-backend/0.1",
-            GDAL_HTTP_VERSION="1.1",
-            CPL_VSIL_CURL_USE_HEAD="NO",
-            GDAL_DISABLE_READDIR_ON_OPEN="EMPTY_DIR",
-            CPL_VSIL_CURL_ALLOWED_EXTENSIONS=".TIF",
-        ):
+        with rasterio.Env(**gdal_http_env()):
             with rasterio.open(PSR_RASTER_URL) as dataset:
                 row, col = dataset.index(x, y)
                 if not (0 <= row < dataset.height and 0 <= col < dataset.width):
@@ -414,7 +492,14 @@ async def _fetch_permanent_shadow(lat: float, lon: float) -> bool | None:
     if not PSR_MIN_LATITUDE <= lat <= PSR_MAX_LATITUDE:
         return None
     try:
-        raster_value = await asyncio.to_thread(_read_psr_raster_value, lat, lon)
+        raster_value = await asyncio.wait_for(
+            asyncio.to_thread(_read_psr_raster_value, lat, lon),
+            REMOTE_RASTER_TIMEOUT_S,
+        )
+    except asyncio.TimeoutError as exc:
+        raise _upstream_error(
+            "The PGDA PSR map timed out.", 504, cause=exc
+        ) from exc
     except PermanentShadowDataError as exc:
         raise _upstream_error(
             "The PGDA PSR map could not be reached.", cause=exc
@@ -430,6 +515,20 @@ async def fetch_lunar_elevation(lat: float, lon: float) -> dict[str, Any]:
     cached = _cache_get(key)
     if cached is not None:
         return cached
+    return await single_flight(key, lambda: _fetch_lunar_elevation(lat, lon, service, key))
+
+
+async def _optional_shadow(lat: float, lon: float) -> tuple[bool | None, bool]:
+    """PSR lookup that never fails the whole point: (value, ok)."""
+    try:
+        return await _fetch_permanent_shadow(lat, lon), True
+    except HTTPException:
+        return None, False
+
+
+async def _fetch_lunar_elevation(
+    lat: float, lon: float, service: dict[str, Any], key: str
+) -> dict[str, Any]:
 
     resolution_m = service["resolutionM"]
     if resolution_m is None:
@@ -448,29 +547,41 @@ async def fetch_lunar_elevation(lat: float, lon: float) -> dict[str, Any]:
     }
     from app.dem_window_source import find_cached_dem_window
 
-    dem_window = await find_cached_dem_window(lat, lon, service)
+    dem_window = await find_cached_dem_window(
+        lat, lon, service, required_margin_m=4 * resolution_m
+    )
+    complete = True
     if dem_window is not None:
-        elevations, in_permanent_shadow = await asyncio.gather(
+        elevations, (in_permanent_shadow, shadow_ok) = await asyncio.gather(
             asyncio.to_thread(
                 _sample_dem_window,
                 dem_window.content,
                 service,
                 sample_points,
             ),
-            _fetch_permanent_shadow(lat, lon),
+            _optional_shadow(lat, lon),
         )
     else:
         async with httpx.AsyncClient(timeout=12.0) as client:
-            samples, in_permanent_shadow = await asyncio.gather(
+            samples, (in_permanent_shadow, shadow_ok) = await asyncio.gather(
                 asyncio.gather(
                     *(
                         _fetch_dem_sample(client, service, point_lat, point_lon)
                         for point_lat, point_lon in sample_points.values()
-                    )
+                    ),
+                    return_exceptions=True,
                 ),
-                _fetch_permanent_shadow(lat, lon),
+                _optional_shadow(lat, lon),
             )
-        elevations = dict(zip(sample_points, samples))
+        # Only the centre sample is essential; a failed neighbour just means no slope.
+        if isinstance(samples[0], BaseException):
+            raise samples[0]
+        complete = not any(isinstance(sample, BaseException) for sample in samples)
+        elevations = {
+            name: None if isinstance(sample, BaseException) else sample
+            for name, sample in zip(sample_points, samples)
+        }
+    complete = complete and shadow_ok
     elevation_m = elevations["center"]
     slope_samples = [elevations[name] for name in ("north", "south", "east", "west")]
     slope_deg = None
@@ -493,8 +604,11 @@ async def fetch_lunar_elevation(lat: float, lon: float) -> dict[str, Any]:
         "inPermanentShadow": in_permanent_shadow,
         "demVersion": service["version"],
         "source": "NASA Moon Trek LRO LOLA ImageServer",
+        # false = slope or PSR could not be fetched this time; asking again may fill them in.
+        "complete": complete,
     }
-    _cache_set(key, result, DEM_CACHE_TTL)
+    # Partial answers are cached briefly so a retry a minute later tries upstream again.
+    _cache_set(key, result, DEM_CACHE_TTL if complete else PARTIAL_RESULT_TTL)
     return result
 
 
@@ -576,6 +690,8 @@ async def _fetch_horizons_body(
             client,
             HORIZONS_URL,
             _horizons_request_params(command, lat, lon, start, end, step_min),
+            retries=HORIZONS_RETRIES,
+            service_name="JPL Horizons",
         )
     try:
         return _parse_horizons_response(payload)
@@ -601,7 +717,22 @@ async def fetch_ephemeris(
     cached = _cache_get(cache_key)
     if cached is not None:
         return cached
+    return await single_flight(
+        cache_key,
+        lambda: _fetch_ephemeris(start, end, lat, lon, step_min, bodies, body_commands, cache_key),
+    )
 
+
+async def _fetch_ephemeris(
+    start: datetime,
+    end: datetime,
+    lat: float,
+    lon: float,
+    step_min: int,
+    bodies: set[str],
+    body_commands: dict[str, str],
+    cache_key: str,
+) -> dict[str, Any]:
     start_utc = start.astimezone(timezone.utc)
     end_utc = end.astimezone(timezone.utc)
     async with httpx.AsyncClient(timeout=30.0) as client:

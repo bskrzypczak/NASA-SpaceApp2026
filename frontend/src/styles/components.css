@@ -465,3 +465,46 @@ dl.details dd {
   justify-content: space-between;
   gap: 12px;
 }
+
+/* Long backend jobs: calendar, scenarios, nearby (components/StepLoader.tsx) */
+.step-loader {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 560px;
+}
+
+.step-loader__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.step-loader__steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.step-loader__steps .is-done {
+  color: var(--text);
+}
+
+.step-loader__steps .is-active {
+  color: var(--accent);
+}
+
+.step-loader__icon {
+  display: inline-block;
+  width: 1.4em;
+}
+
+.step-loader__hint {
+  font-size: 13px;
+}
