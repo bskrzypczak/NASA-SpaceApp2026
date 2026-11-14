@@ -7,7 +7,6 @@ import { useApi } from '../hooks/useApi';
 import { apiMode, getTerrainPoint } from '../api/client';
 import { SITES } from '../data/sites';
 import { formatLat, formatLon, fromQuery, parseLat, parseLon, toQuery } from '../lib/coords';
-import { TERRAIN_LIMIT_NOTE, terrainSimAvailable } from '../lib/requests';
 
 /** Screen 3 — the chosen landing point. The confirm popup (screen 4) renders in the <Outlet />. */
 export function SitePage() {
@@ -108,7 +107,7 @@ export function SitePage() {
           ▶ Start simulation
         </button>
         <p className="muted" style={{ margin: '-12px 0 0', fontSize: 13, textAlign: 'center' }}>
-          {terrainSimAvailable(lat) ? 'Sun & Earth from JPL Horizons · terrain from LOLA' : `ⓘ ${TERRAIN_LIMIT_NOTE}`}
+          Sun &amp; Earth from JPL Horizons · terrain from LOLA
         </p>
       </aside>
 

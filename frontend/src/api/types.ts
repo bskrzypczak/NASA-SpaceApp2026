@@ -216,3 +216,31 @@ export interface CalendarResult {
   months: CalendarMonth[];
   mock?: boolean;
 }
+
+/* ---------- Scenario comparison (backend §4.9) ---------- */
+
+export type ScenarioSpec = Omit<SimulationRequest, 'includeTimeseries'> & { label: string; includeTimeseries?: false };
+
+export interface ScenarioRequirements {
+  minSocPct: number;
+  minEarthVisiblePct: number;
+}
+
+export interface ScenarioCompareRequest {
+  scenarios: ScenarioSpec[];
+  requirements: ScenarioRequirements;
+}
+
+export interface ScenarioResult {
+  label: string;
+  simulationId: string;
+  summary: SimSummary;
+  windows: { sun: DayWindow[]; earth: DayWindow[]; both: DayWindow[] };
+  meetsRequirements: boolean;
+}
+
+export interface ScenarioCompareResponse {
+  results: ScenarioResult[];
+  recommendation: { label: string; reason: string } | null;
+  mock?: boolean;
+}

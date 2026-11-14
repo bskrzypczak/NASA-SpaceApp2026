@@ -13,6 +13,8 @@ export function TopBar() {
     { to: '/catalog', label: 'Catalog', end: false },
     { to: `/site${toQuery({ lat, lon })}`, label: 'Site', end: false },
     ...(lastSim ? [{ to: `/simulation/${encodeURIComponent(lastSim)}`, label: 'Simulation', end: false }] : []),
+    { to: '/dates', label: 'Dates', end: false },
+    { to: '/scenarios', label: 'Scenarios', end: false },
   ];
 
   return (
