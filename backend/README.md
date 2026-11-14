@@ -634,10 +634,12 @@ współrzędne pozostają przybliżone (`coordsVerified: false`).
 `/terrain/point` pobiera wartości z NASA Moon Trek ImageServer: DEM biegunowe
 LOLA ma rozdzielczość 100 m/px, a globalny DEM 256 px/stopień. Nie jest to
 deklarowany w pierwotnym projekcie zestaw PGDA 5 m/px; odpowiedź zwraca
-rozdzielczość i identyfikator użytej warstwy. Nachylenie jest szacowane z
-centralnych różnic wysokości w czterech kierunkach. `inPermanentShadow`
-jest odczytywane z mapy PSR PGDA (20 m/px, 80–90°S); poza jej zasięgiem lub
-w pikselach NoData zwraca `null`.
+rozdzielczość i identyfikator użytej warstwy. Próbki dla DEM polarnych są
+przeliczane do natywnej projekcji stereograficznej Moon2000; DEM globalny
+otrzymuje współrzędne geograficzne. Nachylenie jest szacowane z centralnych
+różnic wysokości w czterech kierunkach. `inPermanentShadow` jest odczytywane
+z mapy PSR PGDA (20 m/px, 80–90°S); poza jej zasięgiem lub w pikselach NoData
+zwraca `null`.
 
 Próbki live mapy PSR zweryfikowano: `lat=-88`, `lon=0` zwróciło `true`,
 a `lat=-89.45`, `lon=-137.3` zwróciło `false`.
@@ -655,17 +657,18 @@ Symulacje i pozostałe endpointy specyfikacji wymagają dalszej implementacji
 oraz danych wejściowych.
 
 Sprawdzenie live wykonane 2026-11-14 dla `lat=-89.45`, `lon=-137.3`:
-`/terrain/point` zwrócił `1318 m` z `LRO_LOLA_DEM_SPole45_100mp_v04`.
+`/terrain/point` pobrał z `LRO_LOLA_DEM_SPole45_100mp_v04` wysokość `1956 m`;
+próbki N/S/E/W wyniosły `1954`, `1955.5`, `1953` i `1952.5 m`, dając
+nachylenie `0.453°`.
 Dla przedziału `2027-03-14T06:00:00Z`–`2027-03-14T06:20:00Z`, krok 10 min,
 Horizons zwrócił dla pierwszej próbki Słońce `az=241.197254°`,
 `el=-1.097653°`, a Ziemię `az=132.864769°`, `el=5.865464°`.
 Wartości są wynikiem zewnętrznych usług NASA/JPL, a nie stałymi testowymi.
-Uwaga: pomiar `/terrain/point` nie jest obecnie wiarygodnie zweryfikowany.
-Podczas prac nad `/horizon` stwierdzono, że jego zapytanie DEM przekazuje
-stopnie geograficzne z przestrzennym SR `104903` (metry stereograficzne).
-Zapytanie w poprawnych współrzędnych projekcji zwróciło dla tego punktu
-`1956 m`; korekta `/terrain/point` i ponowna walidacja nachylenia są osobnym
-zadaniem i nie zostały włączone do feature'u `/horizon`.
+Wartość `1318 m` z wcześniejszego pomiaru wynikała z błędnego podania stopni
+geograficznych jako metrów projekcji. Współrzędne próbek są teraz przeliczane
+do natywnego SR każdego DEM-u. Live sprawdzono projekcję północną względem
+GeoTIFF-a; pozostałe regiony i nachylenie wymagają dalszej walidacji na
+niezależnych punktach kontrolnych.
 
 ### Kolejność prac
 

@@ -1,13 +1,18 @@
 import asyncio
+import json
 
+import httpx
 import numpy as np
 import pytest
 from fastapi import HTTPException
 
 from app.sources import (
+    DEM_SERVICES,
     PermanentShadowDataError,
+    _fetch_dem_sample,
     _fetch_permanent_shadow,
     _horizon_profile_from_dem,
+    _north_polar_stereographic_xy,
     _parse_horizons_response,
     _south_polar_stereographic_xy,
     _slope_from_cardinal_samples,
@@ -33,6 +38,48 @@ def test_psr_projection_matches_moon_south_polar_projection():
 
     assert x == pytest.approx(-11310.3272)
     assert y == pytest.approx(-12256.8842)
+
+
+@pytest.mark.parametrize(
+    ("service_name", "lat", "lon", "expected_x", "expected_y", "expected_sr"),
+    [
+        ("south-pole", -89.45, -137.3, -11310.3272, -12256.8842, "104903"),
+        ("north-pole", 89.45, -137.3, -11310.3272, 12256.8842, "104904"),
+        ("global", 10.0, -137.3, -137.3, 10.0, None),
+    ],
+)
+def test_dem_samples_use_native_service_coordinates(
+    monkeypatch, service_name, lat, lon, expected_x, expected_y, expected_sr
+):
+    observed = {}
+
+    async def fake_get_json(_client, url, params):
+        observed["url"] = url
+        observed["params"] = params
+        return {"value": "123.5"}
+
+    monkeypatch.setattr("app.sources._get_json", fake_get_json)
+
+    async def fetch_sample():
+        async with httpx.AsyncClient() as client:
+            return await _fetch_dem_sample(
+                client, DEM_SERVICES[service_name], lat, lon
+            )
+
+    result = asyncio.run(fetch_sample())
+    geometry = json.loads(observed["params"]["geometry"])
+
+    assert result == 123.5
+    assert geometry["x"] == pytest.approx(expected_x)
+    assert geometry["y"] == pytest.approx(expected_y)
+    assert observed["params"].get("sr") == expected_sr
+
+
+def test_north_polar_projection_matches_moon_north_polar_projection():
+    x, y = _north_polar_stereographic_xy(89.45, -137.3)
+
+    assert x == pytest.approx(-11310.3272)
+    assert y == pytest.approx(12256.8842)
 
 
 def test_horizon_profile_accounts_for_curvature_and_directional_ridge():

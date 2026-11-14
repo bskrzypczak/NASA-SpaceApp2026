@@ -39,16 +39,22 @@ MOON_RADIUS_M = 1_737_400.0
 DEM_SERVICES = {
     "south-pole": {
         "url": f"{MOON_TREK_BASE}/LRO_LOLA_DEM_SPole45_100mp_v04/ImageServer/identify",
+        "projection": "south-polar",
+        "spatialReference": "104903",
         "resolutionM": 100.0,
         "version": "LRO_LOLA_DEM_SPole45_100mp_v04",
     },
     "north-pole": {
         "url": f"{MOON_TREK_BASE}/LRO_LOLA_DEM_NPole45_100mp_v04/ImageServer/identify",
+        "projection": "north-polar",
+        "spatialReference": "104904",
         "resolutionM": 100.0,
         "version": "LRO_LOLA_DEM_NPole45_100mp_v04",
     },
     "global": {
         "url": f"{MOON_TREK_BASE}/LRO_LOLA_DEM_Global_256ppd_v06/ImageServer/identify",
+        "projection": "geographic",
+        "spatialReference": None,
         "resolutionM": None,
         "version": "LRO_LOLA_DEM_Global_256ppd_v06",
     },
@@ -163,14 +169,23 @@ async def _fetch_dem_sample(
     lat: float,
     lon: float,
 ) -> float | None:
+    projection = service["projection"]
+    if projection == "south-polar":
+        x, y = _south_polar_stereographic_xy(lat, lon)
+    elif projection == "north-polar":
+        x, y = _north_polar_stereographic_xy(lat, lon)
+    else:
+        x, y = lon, lat
+
     params = {
-        "geometry": json.dumps({"x": lon, "y": lat}, separators=(",", ":")),
+        "geometry": json.dumps({"x": x, "y": y}, separators=(",", ":")),
         "geometryType": "esriGeometryPoint",
-        "sr": "104903",
         "returnGeometry": "false",
         "returnCatalogItems": "false",
         "f": "json",
     }
+    if service["spatialReference"] is not None:
+        params["sr"] = service["spatialReference"]
     payload = await _get_json(client, service["url"], params)
     try:
         value = float(payload.get("value"))
@@ -195,6 +210,12 @@ def _south_polar_stereographic_xy(lat: float, lon: float) -> tuple[float, float]
     rho = 2 * MOON_RADIUS_M * math.tan(math.pi / 4 + math.radians(lat) / 2)
     longitude = math.radians(lon)
     return rho * math.sin(longitude), rho * math.cos(longitude)
+
+
+def _north_polar_stereographic_xy(lat: float, lon: float) -> tuple[float, float]:
+    rho = 2 * MOON_RADIUS_M * math.tan(math.pi / 4 - math.radians(lat) / 2)
+    longitude = math.radians(lon)
+    return rho * math.sin(longitude), -rho * math.cos(longitude)
 
 
 def _horizon_profile_from_dem(
