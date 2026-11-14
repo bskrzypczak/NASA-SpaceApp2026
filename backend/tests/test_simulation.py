@@ -121,10 +121,51 @@ def test_mission_visibility_metrics_ignore_ephemeris_after_mission_end():
     assert result["summary"]["sunlitPct"] == 12.5
     assert result["summary"]["earthVisiblePct"] == 12.5
     assert result["summary"]["bothPct"] == 12.5
+    assert 0 <= result["summary"]["bothPct"] <= min(
+        result["summary"]["sunlitPct"],
+        result["summary"]["earthVisiblePct"],
+    ) <= 100
     assert result["windows"]["both"] == [
         {"fromDay": 0.0, "toDay": 0.125},
         {"fromDay": 1.375, "toDay": 2.0},
     ]
+
+
+def test_mission_visibility_includes_sample_at_mission_end():
+    request = SimulationRequest(
+        site={"lat": 0.0, "lon": 0.0},
+        landingTime=datetime(2027, 3, 14, 6, tzinfo=timezone.utc),
+        missionDays=1,
+        windowDays=2,
+        stepMin=720,
+        horizonModel="flat",
+    )
+    ephemeris = {
+        "sun": {
+            "azDeg": [0.0] * 4,
+            "elDeg": [0.734, 0.734, -1.266, -1.266],
+        },
+        "earth": {
+            "azDeg": [0.0] * 4,
+            "elDeg": [0.05, 0.05, -1.95, -1.95],
+        },
+    }
+
+    result = build_simulation_result(
+        request=request,
+        input_echo={},
+        site={"name": "Test site", "lat": 0.0, "lon": 0.0, "elevationM": 0.0},
+        ephemeris=ephemeris,
+        sun_horizon=None,
+        earth_horizon=None,
+        simulation_id="sim_mission_boundary",
+        created_at="2027-03-14T06:00:00Z",
+        weights={"power": 0.5, "comms": 0.3, "night": 0.2},
+    )
+
+    assert result["summary"]["sunlitPct"] == 75.0
+    assert result["summary"]["earthVisiblePct"] == 75.0
+    assert result["summary"]["bothPct"] == 75.0
 
 
 def test_simulation_rejects_malformed_horizon_profile():

@@ -13,7 +13,11 @@ from app.heightmap_source import (
     _heightmap_export_params,
     _heightmap_from_dem,
 )
-from app.horizon_source import _horizon_profile_from_dem
+from app.horizon_source import (
+    _horizon_export_params,
+    _horizon_profile_from_dem,
+    fetch_horizon,
+)
 from app.sources import (
     DEM_SERVICES,
     PermanentShadowDataError,
@@ -196,13 +200,13 @@ def test_heightmap_export_uses_polar_projection_and_covers_local_square():
 def test_horizon_profile_accounts_for_curvature_and_directional_ridge():
     dem = np.zeros((12, 12), dtype=np.float32)
     parameters = {
-        "left_m": -550.0,
-        "top_m": 550.0,
-        "pixel_width_m": 100.0,
-        "pixel_height_m": 100.0,
+        "left": -550.0,
+        "top": 550.0,
+        "pixel_width": 100.0,
+        "pixel_height": 100.0,
         "nodata": None,
-        "center_x_m": 0.0,
-        "center_y_m": 0.0,
+        "center_x": 0.0,
+        "center_y": 0.0,
         "lat": -90.0,
         "lon": 0.0,
         "height_m": 2.0,
@@ -232,13 +236,13 @@ def test_horizon_profile_returns_all_requested_azimuth_bins(
     dem = np.zeros((4, 4), dtype=np.float32)
     azimuths, elevations = _horizon_profile_from_dem(
         dem,
-        left_m=-150.0,
-        top_m=150.0,
-        pixel_width_m=100.0,
-        pixel_height_m=100.0,
+        left=-150.0,
+        top=150.0,
+        pixel_width=100.0,
+        pixel_height=100.0,
         nodata=None,
-        center_x_m=0.0,
-        center_y_m=0.0,
+        center_x=0.0,
+        center_y=0.0,
         lat=-90.0,
         lon=0.0,
         height_m=2.0,
@@ -249,6 +253,76 @@ def test_horizon_profile_returns_all_requested_azimuth_bins(
     assert len(azimuths) == expected_count
     assert len(elevations) == expected_count
     assert azimuths[-1] == pytest.approx(360.0 - bin_deg)
+
+
+def test_horizon_profile_supports_geographic_dem_coordinates():
+    dem = np.zeros((7, 7), dtype=np.float32)
+    azimuths, elevations = _horizon_profile_from_dem(
+        dem,
+        left=-0.175,
+        top=0.175,
+        pixel_width=0.05,
+        pixel_height=0.05,
+        nodata=None,
+        center_x=0.0,
+        center_y=0.0,
+        lat=0.0,
+        lon=0.0,
+        height_m=2.0,
+        bin_deg=90.0,
+        projection="geographic",
+        max_distance_m=100.0,
+    )
+
+    assert azimuths == [0.0, 90.0, 180.0, 270.0]
+    assert elevations == pytest.approx([-1.148] * 4, abs=0.001)
+
+
+@pytest.mark.parametrize(
+    ("lat", "service_name", "projection", "resolution_m"),
+    [
+        (-89.45, "south-pole", "south-polar", 100.0),
+        (0.0, "global", "geographic", 118.5),
+        (89.45, "north-pole", "north-polar", 100.0),
+    ],
+)
+def test_fetch_horizon_selects_dem_service_and_reports_its_metadata(
+    monkeypatch, lat, service_name, projection, resolution_m
+):
+    observed = {}
+    real_async_client = httpx.AsyncClient
+
+    async def serve_image(request):
+        observed["url"] = str(request.url.copy_with(query=None))
+        observed["params"] = dict(request.url.params)
+        return httpx.Response(200, content=b"II*\x00")
+
+    def async_client(*args, **kwargs):
+        return real_async_client(
+            *args,
+            transport=httpx.MockTransport(serve_image),
+            **kwargs,
+        )
+
+    def fake_profile(_raster_bytes, _lat, _lon, _height, _bin, used_projection):
+        observed["projection"] = used_projection
+        return [0.0], [0.0]
+
+    monkeypatch.setattr("app.horizon_source.httpx.AsyncClient", async_client)
+    monkeypatch.setattr(
+        "app.horizon_source._horizon_profile_from_tiff", fake_profile
+    )
+
+    result = asyncio.run(fetch_horizon(lat, 12.0, 2.0, 0.5))
+    service = DEM_SERVICES[service_name]
+    expected_url = service["url"].rsplit("/", 1)[0] + "/exportImage"
+
+    assert observed["url"] == expected_url
+    assert observed["projection"] == projection
+    assert result["demVersion"] == service["version"]
+    assert result["demResolutionM"] == resolution_m
+    assert observed["params"]["format"] == "tiff"
+    assert observed["params"]["pixelType"] == "F32"
 
 
 def test_psr_map_values_become_booleans_and_nodata_stays_unknown(monkeypatch):

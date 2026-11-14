@@ -108,16 +108,6 @@ async def create_simulation(request: SimulationRequest) -> dict:
                 "field": "landingTime",
             },
         )
-    if request.horizonModel == "real" and lat > -80:
-        raise HTTPException(
-            status_code=422,
-            detail={
-                "code": "OUT_OF_DEM_COVERAGE",
-                "message": "Real terrain simulations require latitude at or south of 80°S.",
-                "field": "site.lat",
-            },
-        )
-
     hardware = request.hardware
     hardware_values = (
         hardware.batteryWh,

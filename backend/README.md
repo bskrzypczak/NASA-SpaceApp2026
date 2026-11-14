@@ -241,7 +241,9 @@ Request:
 - `missionDays` nie może przekraczać `windowDays`; oba okna muszą mieścić się w 1–30 dniach.
 - `stepMin` musi dzielić dokładnie oba okna; limit to 4320 próbek. `landingTime` wymaga strefy czasowej i pełnej minuty.
 - Wagi są normalizowane do sumy 1. `includeTimeseries: false` pomija duże tablice przebiegów.
-- `horizonModel: "real"` wymaga szerokości co najmniej 80°S. `"flat"` działa poza zasięgiem polarnego DEM.
+- `horizonModel: "real"` dobiera DEM do szerokości: południowy polarny dla
+  `lat <= -45`, północny polarny dla `lat >= 45`, a globalny pomiędzy nimi.
+  `"flat"` pozostaje opcją bez maski terenu.
 
 Odpowiedź `201`:
 
@@ -342,7 +344,7 @@ Odpowiedź `200`:
   ],
   "best": { "date": "2027-03-28", "successPct": 92 },
   "months": [
-    { "month": "2027-03", "goodDays": 9, "bestPct": 92, "season": "neutral" }
+    { "month": "2027-03", "goodDays": 9, "bestPct": 92 }
   ]
 }
 ```
@@ -356,9 +358,9 @@ Odpowiedź `200`:
   porcjami do 4320 próbek; źródłowy cache ogranicza powtórne pobrania.
 - `goodDays` oznacza liczbę dni z `successPct >= 80`. `best` wybiera najwyższy
   wynik, a przy remisie wcześniejszą datę.
-- `season` jest orientacyjną etykietą miesiąca względem półkuli (grudzień–
-  luty = lato na południu, zima na północy; czerwiec–sierpień odwrotnie;
-  pozostałe miesiące i równik = `neutral`). Nie jest wyznaczana z efemeryd.
+- Miesięczne agregaty zawierają `month`, `goodDays` i `bestPct`; nie zwracają
+  etykiety pory roku, której nie da się rzetelnie wywnioskować z ziemskiego
+  miesiąca kalendarzowego.
 - Endpoint działa synchronicznie. Pierwsze roczne żądanie z `real` może być
   długie, ponieważ pobiera horyzont i kilka porcji efemeryd.
 

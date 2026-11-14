@@ -245,14 +245,26 @@ def test_horizon_endpoint_rejects_unsupported_bin_size():
     assert response.json()["error"]["field"] == "binDeg"
 
 
-def test_horizon_endpoint_reports_dem_coverage():
+def test_horizon_endpoint_allows_global_dem_latitudes(monkeypatch):
+    async def fake_horizon(lat, lon, height_m, bin_deg):
+        assert lat == -79.9
+        return {
+            "lat": lat,
+            "lon": lon,
+            "heightM": height_m,
+            "binDeg": bin_deg,
+            "demVersion": "LRO_LOLA_DEM_Global_256ppd_v06",
+            "demResolutionM": 118.0,
+        }
+
+    monkeypatch.setattr("app.main.fetch_horizon", fake_horizon)
     response = client.get(
         f"{API}/horizon",
         params={"lat": -79.9, "lon": 0},
     )
 
-    assert response.status_code == 422
-    assert response.json()["error"]["code"] == "OUT_OF_DEM_COVERAGE"
+    assert response.status_code == 200
+    assert response.json()["demVersion"] == "LRO_LOLA_DEM_Global_256ppd_v06"
 
 
 def test_simulation_post_and_get_return_idempotent_contract(monkeypatch):
@@ -355,7 +367,7 @@ def test_simulation_real_terrain_uses_separate_observer_heights(monkeypatch):
     response = client.post(
         f"{API}/simulations",
         json={
-            "site": {"lat": -89.45, "lon": 222.7},
+            "site": {"lat": -40.0, "lon": 222.7},
             "landingTime": "2027-03-14T06:00:00Z",
             "missionDays": 1,
             "windowDays": 1,

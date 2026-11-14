@@ -319,7 +319,7 @@ def _calculate_case(
         both_clearances, request.stepMin / 1440, request.windowDays
     )
 
-    mission_sample_count = request.missionDays * 1440 // request.stepMin
+    mission_sample_count = request.missionDays * 1440 // request.stepMin + 1
     mission_sun_windows = _visibility_windows(
         sun_clearances[:mission_sample_count],
         request.stepMin / 1440,

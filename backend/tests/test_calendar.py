@@ -54,8 +54,8 @@ def test_calendar_scores_each_landing_day_and_aggregates_months(monkeypatch):
     assert all(day["successPct"] == 97 for day in result["days"])
     assert result["best"] == {"date": "2027-01-31", "successPct": 97}
     assert result["months"] == [
-        {"month": "2027-01", "goodDays": 1, "bestPct": 97, "season": "summer"},
-        {"month": "2027-02", "goodDays": 1, "bestPct": 97, "season": "summer"},
+        {"month": "2027-01", "goodDays": 1, "bestPct": 97},
+        {"month": "2027-02", "goodDays": 1, "bestPct": 97},
     ]
     assert observed["lon"] == -137.3
     assert observed["step_min"] == 60
@@ -88,7 +88,7 @@ def test_calendar_fetches_separate_real_masks_for_panel_and_mast(monkeypatch):
     response = client.post(
         f"{API}/calendar",
         json={
-            "site": {"lat": -89.45, "lon": -137.3},
+            "site": {"lat": 0.0, "lon": -137.3},
             "from": "2027-03-14",
             "to": "2027-03-14",
             "missionDays": 1,

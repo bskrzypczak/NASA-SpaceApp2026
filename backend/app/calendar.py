@@ -31,18 +31,6 @@ class CalendarRequest(BaseModel):
     hardware: SimulationHardware = Field(default_factory=SimulationHardware)
 
 
-def _season_for_month(month: int, latitude: float) -> str:
-    if latitude == 0:
-        return "neutral"
-    summer_months = {12, 1, 2} if latitude < 0 else {6, 7, 8}
-    winter_months = {6, 7, 8} if latitude < 0 else {12, 1, 2}
-    if month in summer_months:
-        return "summer"
-    if month in winter_months:
-        return "winter"
-    return "neutral"
-
-
 def build_calendar_result(
     *,
     request: CalendarRequest,
@@ -123,7 +111,6 @@ def build_calendar_result(
             "month": month,
             "goodDays": sum(day["successPct"] >= 80 for day in month_days),
             "bestPct": max(day["successPct"] for day in month_days),
-            "season": _season_for_month(int(month[5:]), lat),
         }
         for month, month_days in sorted(grouped_days.items())
     ]

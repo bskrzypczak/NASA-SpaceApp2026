@@ -171,16 +171,6 @@ async def create_calendar(request: CalendarRequest) -> dict:
         lon = normalize_longitude(request.site.lon)
         site_name = "Custom landing site"
 
-    if request.horizonModel == "real" and lat > -80:
-        raise HTTPException(
-            status_code=422,
-            detail={
-                "code": "OUT_OF_DEM_COVERAGE",
-                "message": "Real terrain calendars require latitude at or south of 80°S.",
-                "field": "site.lat",
-            },
-        )
-
     landing_time_of_day = time.fromisoformat(request.landingTimeOfDay[:-1])
     start = datetime.combine(
         request.from_date,

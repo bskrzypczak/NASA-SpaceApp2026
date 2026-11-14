@@ -258,15 +258,6 @@ async def get_horizon(
                 "field": "binDeg",
             },
         )
-    if lat > -80:
-        raise HTTPException(
-            status_code=422,
-            detail={
-                "code": "OUT_OF_DEM_COVERAGE",
-                "message": "Terrain-based results require latitude at or south of 80°S.",
-                "field": "lat",
-            },
-        )
     return await fetch_horizon(
         lat,
         normalize_longitude(lon),
