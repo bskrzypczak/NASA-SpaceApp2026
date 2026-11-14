@@ -238,6 +238,10 @@ Request:
 - `site` to **albo** `{ "siteId": "…" }`, **albo** `{ "lat": -89.45, "lon": -137.3 }`.
 - `horizonModel`: `"real"` (teren LOLA) albo `"flat"` (gładka sfera) — przełącznik „Real terrain ↔ Flat horizon”.
 - `hardware` i `weights` opcjonalne — domyślne wartości jak wyżej (preset „CLPS-class lander”).
+- `missionDays` nie może przekraczać `windowDays`; oba okna muszą mieścić się w 1–30 dniach.
+- `stepMin` musi dzielić dokładnie oba okna; limit to 4320 próbek. `landingTime` wymaga strefy czasowej i pełnej minuty.
+- Wagi są normalizowane do sumy 1. `includeTimeseries: false` pomija duże tablice przebiegów.
+- `horizonModel: "real"` wymaga szerokości co najmniej 80°S. `"flat"` działa poza zasięgiem polarnego DEM.
 
 Odpowiedź `201`:
 
@@ -306,11 +310,11 @@ Co z tego bierze frontend:
 | Scena 3D | `timeseries.sun*/earth*` (kierunek światła i pozycja Ziemi) |
 | Pro | wszystko + eksport |
 
-Czas odpowiedzi: **< 1 s** dla miejsc z katalogu, **< 5 s** dla własnych współrzędnych (liczenie maski). Powyżej → tryb async (§5).
+Endpoint działa synchronicznie. Przy pierwszym żądaniu z `"real"` pobranie DEM horyzontu może zająć kilkadziesiąt sekund; odpowiedzi efemeryd i profili horyzontu są cache'owane przez źródłowe endpointy.
 
 ### 4.7 `GET /simulations/{id}` — zapisana symulacja
 
-Ta sama odpowiedź co `POST /simulations`. Służy do linku do udostępnienia i do Mission brief. Symulacje są **niezmienne** — inne parametry = nowe `id`.
+Ta sama odpowiedź co `POST /simulations`. Służy do linku do udostępnienia i do Mission brief. Symulacje są **niezmienne** — inne parametry = nowe `id`. W MVP wyniki są przechowywane w pamięci procesu (maksymalnie 256); restart serwera usuwa zapisane wyniki i linki przestają działać.
 
 ### 4.8 `POST /calendar` — ocena dla każdego dnia lądowania
 
@@ -593,7 +597,7 @@ Domyślne wagi: `wP = 0.5`, `wC = 0.3`, `wN = 0.2`. **Front i backend muszą lic
 | Efemerydy | dysk / SQLite | `body, lat, lon, start, end, step` |
 | Maski horyzontu | pliki `.npy` / JSON | `lat, lon, heightM, binDeg, demVersion` |
 | Heightmapy | pliki PNG16 | `lat, lon, sizeKm, res, demVersion` |
-| Symulacje | baza (niezmienne) | hash znormalizowanego requestu → to samo `id` |
+| Symulacje | pamięć procesu, maks. 256 | hash znormalizowanego requestu → to samo `id`; restart usuwa wyniki |
 | Kalendarz katalogu | JSON z wyprzedzeniem | `siteId, rok, preset` |
 
 - Odpowiedzi GET z `ETag` + `Cache-Control: public, max-age=86400` (dane się nie zmieniają).
@@ -627,8 +631,8 @@ API działa pod `http://localhost:8000/api/v1`, a dokumentacja OpenAPI pod
 Testy uruchom poleceniem `python -m pytest` w katalogu `backend/`.
 
 Obecna implementacja udostępnia `GET /health`, `GET /sites`,
-`GET /sites/{id}`, `GET /terrain/point`, `GET /ephemeris` i
-`GET /meta/sources`. Katalog ma te same 19 wpisów co frontend; jego
+`GET /sites/{id}`, `GET /terrain/point`, `GET /horizon`, `GET /ephemeris`,
+`POST /simulations`, `GET /simulations/{id}` i `GET /meta/sources`. Katalog ma te same 19 wpisów co frontend; jego
 współrzędne pozostają przybliżone (`coordsVerified: false`).
 
 `/terrain/point` pobiera wartości z NASA Moon Trek ImageServer: DEM biegunowe
@@ -649,12 +653,16 @@ kąt terenu dla każdego azymutu. Pełny promień ma 150 km; pierwsze żądanie 
 wolniejsze z powodu pobrania obrazu, kolejne odpowiedzi z tym samym kluczem
 korzystają z cache'u.
 
+`POST /simulations` łączy efemerydy JPL Horizons z maskami terenu, liczy
+widoczność tarczy Słońca i Ziemi, okna, baterię oraz ocenę powodzenia według
+heurystyki z §5. Wyniki można pobrać przez `GET /simulations/{id}` do czasu
+restartu procesu lub usunięcia wpisu z limitowanego cache'u.
+
 `/ephemeris` odpytuje JPL Horizons dla obserwatora na powierzchni Księżyca
 (body 301), z modelem airless i DE441. Zakres musi mieć strefę czasową, być
 podzielny przez `stepMin` i nie przekraczać 4320 próbek. Odpowiedzi są cache'owane
 w pamięci procesu przez 24 godziny. Błędy i timeouty źródeł są zwracane jawnie.
-Symulacje i pozostałe endpointy specyfikacji wymagają dalszej implementacji
-oraz danych wejściowych.
+Pozostałe endpointy specyfikacji wymagają dalszej implementacji oraz danych wejściowych.
 
 Sprawdzenie live wykonane 2026-11-14 dla `lat=-89.45`, `lon=-137.3`:
 `/terrain/point` pobrał z `LRO_LOLA_DEM_SPole45_100mp_v04` wysokość `1956 m`;

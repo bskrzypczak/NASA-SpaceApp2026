@@ -133,6 +133,202 @@ def test_horizon_endpoint_reports_dem_coverage():
     assert response.json()["error"]["code"] == "OUT_OF_DEM_COVERAGE"
 
 
+def test_simulation_post_and_get_return_idempotent_contract(monkeypatch):
+    async def fake_ephemeris(lat, lon, start, end, step_min, bodies):
+        assert lat == -89.45
+        assert lon == -137.3
+        assert step_min == 720
+        assert bodies == {"sun", "earth"}
+        return {
+            "times": ["2027-03-14T06:00:00Z", "2027-03-14T18:00:00Z"],
+            "sun": {"azDeg": [0.0, 180.0], "elDeg": [-90.0, -90.0]},
+            "earth": {"azDeg": [0.0, 180.0], "elDeg": [-1.95, 0.05]},
+        }
+
+    async def fake_terrain(lat, lon):
+        return {"elevationM": 1956.0}
+
+    monkeypatch.setattr("app.main.fetch_ephemeris", fake_ephemeris)
+    monkeypatch.setattr("app.main.fetch_lunar_elevation", fake_terrain)
+    monkeypatch.setattr("app.main.SIMULATIONS", {})
+    response = client.post(
+        f"{API}/simulations",
+        json={
+            "site": {"siteId": "connecting-ridge"},
+            "landingTime": "2027-03-14T06:00:00Z",
+            "missionDays": 1,
+            "windowDays": 1,
+            "stepMin": 720,
+            "horizonModel": "flat",
+        },
+    )
+
+    assert response.status_code == 201
+    result = response.json()
+    assert result["site"] == {
+        "name": "Connecting Ridge",
+        "lat": -89.45,
+        "lon": -137.3,
+        "elevationM": 1956.0,
+    }
+    assert result["input"]["hardware"]["batteryWh"] == 20000
+    assert result["summary"]["successPct"] == 97
+    assert result["timeseries"]["stepMin"] == 720
+    assert client.get(f"{API}/simulations/{result['id']}").json() == result
+
+    repeated = client.post(
+        f"{API}/simulations",
+        json={
+            "site": {"siteId": "connecting-ridge"},
+            "landingTime": "2027-03-14T06:00:00Z",
+            "missionDays": 1,
+            "windowDays": 1,
+            "stepMin": 720,
+            "horizonModel": "flat",
+        },
+    )
+    assert repeated.json() == result
+
+    without_series = client.post(
+        f"{API}/simulations",
+        json={
+            "site": {"siteId": "connecting-ridge"},
+            "landingTime": "2027-03-14T06:00:00Z",
+            "missionDays": 1,
+            "windowDays": 1,
+            "stepMin": 720,
+            "horizonModel": "flat",
+            "includeTimeseries": False,
+        },
+    )
+    assert without_series.status_code == 201
+    assert "timeseries" not in without_series.json()
+
+
+def test_simulation_real_terrain_uses_separate_observer_heights(monkeypatch):
+    requested_heights = []
+
+    async def fake_ephemeris(_lat, _lon, _start, _end, _step_min, _bodies):
+        return {
+            "times": ["2027-03-14T06:00:00Z", "2027-03-14T18:00:00Z"],
+            "sun": {"azDeg": [0.0, 180.0], "elDeg": [1.0, -1.0]},
+            "earth": {"azDeg": [90.0, 270.0], "elDeg": [2.0, 2.0]},
+        }
+
+    async def fake_terrain(_lat, _lon):
+        return {"elevationM": 1956.0}
+
+    async def fake_horizon(_lat, _lon, height_m, bin_deg):
+        requested_heights.append((height_m, bin_deg))
+        return {
+            "azimuthDeg": [0.0, 90.0, 180.0, 270.0],
+            "elevationDeg": [height_m, height_m, height_m, height_m],
+        }
+
+    monkeypatch.setattr("app.main.fetch_ephemeris", fake_ephemeris)
+    monkeypatch.setattr("app.main.fetch_lunar_elevation", fake_terrain)
+    monkeypatch.setattr("app.main.fetch_horizon", fake_horizon)
+    monkeypatch.setattr("app.main.SIMULATIONS", {})
+
+    response = client.post(
+        f"{API}/simulations",
+        json={
+            "site": {"lat": -89.45, "lon": 222.7},
+            "landingTime": "2027-03-14T06:00:00Z",
+            "missionDays": 1,
+            "windowDays": 1,
+            "stepMin": 720,
+            "hardware": {"panelHeightM": 2, "mastHeightM": 3.5},
+        },
+    )
+
+    assert response.status_code == 201
+    assert requested_heights == [(2.0, 0.5), (3.5, 0.5)]
+    assert response.json()["input"]["site"]["lon"] == -137.3
+    assert len(response.json()["timeseries"]["day"]) == 2
+    assert response.json()["timeseries"]["sunMaskElDeg"] == [2.0, 2.0]
+    assert response.json()["timeseries"]["earthMaskElDeg"] == [3.5, 3.5]
+    assert (
+        response.json()["summary"]["flatHorizonSuccessPct"]
+        > response.json()["summary"]["successPct"]
+    )
+
+
+def test_simulation_validates_site_and_sampling_window(monkeypatch):
+    monkeypatch.setattr("app.main.SIMULATIONS", {})
+    missing_site = client.post(
+        f"{API}/simulations",
+        json={
+            "site": {},
+            "landingTime": "2027-03-14T06:00:00Z",
+            "horizonModel": "flat",
+        },
+    )
+    assert missing_site.status_code == 400
+    assert missing_site.json()["error"]["field"] == "site"
+
+    unknown_site = client.post(
+        f"{API}/simulations",
+        json={
+            "site": {"siteId": "not-a-site"},
+            "landingTime": "2027-03-14T06:00:00Z",
+            "horizonModel": "flat",
+        },
+    )
+    assert unknown_site.status_code == 404
+
+    excessive_samples = client.post(
+        f"{API}/simulations",
+        json={
+            "site": {"siteId": "connecting-ridge"},
+            "landingTime": "2027-03-14T06:00:00Z",
+            "windowDays": 30,
+            "stepMin": 1,
+            "horizonModel": "flat",
+        },
+    )
+    assert excessive_samples.status_code == 400
+    assert excessive_samples.json()["error"]["field"] == "stepMin"
+
+
+def test_simulation_accepts_default_30_day_4320_sample_window(monkeypatch):
+    async def fake_ephemeris(lat, lon, start, end, step_min, bodies):
+        assert (end - start).total_seconds() == 30 * 86400 - 10 * 60
+        assert step_min == 10
+        sample_count = 30 * 24 * 60 // step_min
+        return {
+            "times": [""] * sample_count,
+            "sun": {
+                "azDeg": [0.0] * sample_count,
+                "elDeg": [1.0] * sample_count,
+            },
+            "earth": {
+                "azDeg": [180.0] * sample_count,
+                "elDeg": [2.0] * sample_count,
+            },
+        }
+
+    async def fake_terrain(_lat, _lon):
+        return {"elevationM": 100.0}
+
+    monkeypatch.setattr("app.main.fetch_ephemeris", fake_ephemeris)
+    monkeypatch.setattr("app.main.fetch_lunar_elevation", fake_terrain)
+    monkeypatch.setattr("app.main.SIMULATIONS", {})
+    response = client.post(
+        f"{API}/simulations",
+        json={
+            "site": {"siteId": "connecting-ridge"},
+            "landingTime": "2027-03-14T06:00:00Z",
+            "horizonModel": "flat",
+        },
+    )
+
+    assert response.status_code == 201
+    result = response.json()
+    assert len(result["timeseries"]["day"]) == 4320
+    assert len(result["timeseries"]["socPct"]) == 4320
+
+
 def test_ephemeris_endpoint_validates_inputs_and_returns_real_source_shape(monkeypatch):
     async def fake_ephemeris(lat, lon, start, end, step_min, bodies):
         assert lat == -89.45
