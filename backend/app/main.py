@@ -134,6 +134,9 @@ async def get_site(site_id: str) -> dict:
     if site is None:
         raise HTTPException(status_code=404, detail="Unknown siteId.")
     terrain = await fetch_lunar_elevation(site["lat"], site["lon"])
+    sources = [terrain["source"]]
+    if terrain["inPermanentShadow"] is not None:
+        sources.append("NASA GSFC PGDA LPSR PSR map")
     return {
         **public_site(site),
         "description": None,
@@ -141,8 +144,9 @@ async def get_site(site_id: str) -> dict:
         "slopeDeg": terrain["slopeDeg"],
         "demCoverage": terrain["demCoverage"],
         "demResolutionM": terrain["demResolutionM"],
+        "inPermanentShadow": terrain["inPermanentShadow"],
         "demVersion": terrain["demVersion"],
-        "sources": [terrain["source"]],
+        "sources": sources,
     }
 
 
@@ -270,5 +274,11 @@ async def get_sources() -> dict:
             "globalResolutionPxPerDegree": 256,
             "note": "The available Moon Trek services are not the 5 m/px PGDA tiles described in the draft spec.",
             "url": "https://trek.nasa.gov/moon/",
+        },
+        "permanentShadow": {
+            "name": "LOLA Permanently Shadowed Regions map",
+            "resolutionM": 20,
+            "coverage": "80-90 degrees south",
+            "url": "https://pgda.gsfc.nasa.gov/data/LOLA_20mpp/LPSR_80S_20MPP_ADJ.TIF",
         },
     }

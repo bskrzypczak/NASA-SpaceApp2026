@@ -633,7 +633,11 @@ LOLA ma rozdzielczość 100 m/px, a globalny DEM 256 px/stopień. Nie jest to
 deklarowany w pierwotnym projekcie zestaw PGDA 5 m/px; odpowiedź zwraca
 rozdzielczość i identyfikator użytej warstwy. Nachylenie jest szacowane z
 centralnych różnic wysokości w czterech kierunkach. `inPermanentShadow`
-pozostaje `null`; mapa PSR z PGDA nie jest jeszcze podłączona do API.
+jest odczytywane z mapy PSR PGDA (20 m/px, 80–90°S); poza jej zasięgiem lub
+w pikselach NoData zwraca `null`.
+
+Próbki live mapy PSR zweryfikowano: `lat=-88`, `lon=0` zwróciło `true`,
+a `lat=-89.45`, `lon=-137.3` zwróciło `false`.
 
 `/ephemeris` odpytuje JPL Horizons dla obserwatora na powierzchni Księżyca
 (body 301), z modelem airless i DE441. Zakres musi mieć strefę czasową, być
