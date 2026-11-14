@@ -1,6 +1,7 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { Placeholder } from '../components/Placeholder';
 import { CoordinateBar } from '../components/CoordinateBar';
+import { Moon3D } from '../components/moon/Moon3D';
 import { useSelection } from '../store/selection';
 import { SITES, FEATURED_IDS } from '../data/sites';
 import { toQuery, type LatLon } from '../lib/coords';
@@ -54,19 +55,10 @@ export function ExplorePage() {
           </Link>
         </div>
 
-        <Placeholder
-          label="3D Moon model"
-          note="Rotatable, zoomable Moon (LROC texture + LOLA terrain). Click the surface to drop a pin and update LAT / LON below."
-          tag="react-three-fiber · next"
-          minHeight={520}
-          style={{ flex: '999 1 560px' }}
-        />
+        <Moon3D style={{ flex: '999 1 560px', minHeight: 560 }} />
       </div>
 
       <CoordinateBar value={{ lat, lon }} onNext={goToSite} />
-      <p className="muted" style={{ textAlign: 'center', margin: 0, fontSize: 14 }}>
-        Drag to rotate · Scroll to zoom · Click the surface to pick a point
-      </p>
     </main>
   );
 }
