@@ -53,9 +53,13 @@ def test_sources_include_polar_visibility_dataset():
         "source": "NASA GSFC PGDA",
         "averagingPeriodYears": 18.6,
         "coverage": "65-90 degrees north and south",
-        "resolutionM": [120, 240],
+        "resolutionM": [60, 120, 240],
         "url": "https://pgda.gsfc.nasa.gov/products/69",
     }
+    assert response.json()["validationRefs"] == [
+        "JPL Horizons DE441 with NASA Moon Trek LOLA horizon",
+        "NASA GSFC PGDA Lunar Polar Illumination",
+    ]
 
 
 def test_catalog_returns_frontend_sites_and_featured_subset():
@@ -63,7 +67,29 @@ def test_catalog_returns_frontend_sites_and_featured_subset():
     assert response.status_code == 200
     assert response.json()["total"] == 19
     assert response.json()["items"][0]["id"] == "connecting-ridge"
-    assert response.json()["items"][0]["coordsVerified"] is False
+    verified_ids = {
+        site["id"]
+        for site in response.json()["items"]
+        if site["coordsVerified"]
+    }
+    assert verified_ids == {
+        "connecting-ridge",
+        "shackleton-rim",
+        "mons-mouton",
+        "chandrayaan-3",
+    }
+    chandrayaan = next(
+        site
+        for site in response.json()["items"]
+        if site["id"] == "chandrayaan-3"
+    )
+    assert (chandrayaan["lat"], chandrayaan["lon"]) == (-69.374, 32.3187)
+    assert next(
+        site
+        for site in response.json()["items"]
+        if site["id"] == "apollo-11"
+    )["coordsVerified"] is False
+    assert response.json()["items"][0]["coordsVerified"] is True
     assert response.json()["items"][0]["precomputed"] is False
 
     featured = client.get(f"{API}/sites", params={"featured": "true"}).json()

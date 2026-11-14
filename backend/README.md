@@ -56,6 +56,7 @@ Każdy błąd ma ten sam kształt:
 | 400 | `VALIDATION_ERROR` | zły zakres/format parametru (`field` wskazuje które) |
 | 404 | `NOT_FOUND` | nieznane `siteId`, `simulationId` |
 | 422 | `OUT_OF_DEM_COVERAGE` | punkt poza zasięgiem DEM — można wtedy użyć `horizonModel: "flat"` |
+| 422 | `OUT_OF_PGDA_COVERAGE` | walidacja punktu poza zasięgiem polarnych produktów PGDA (65–90°N/S) |
 | 429 | `RATE_LIMITED` | za dużo ciężkich zapytań (kalendarz, nearby) |
 | 502 | `UPSTREAM_ERROR` | Horizons nie odpowiada; `retryAfterS` w odpowiedzi |
 | 504 | `TIMEOUT` | obliczenie trwało za długo — użyj trybu async (patrz §5) |
@@ -116,15 +117,15 @@ Odpowiedź `200`:
       "lat": -89.45,
       "lon": -137.3,
       "region": "South pole",
-      "coordsVerified": false,
-      "precomputed": true
+      "coordsVerified": true,
+      "precomputed": false
     }
   ],
   "total": 19
 }
 ```
 
-- `coordsVerified` — czy współrzędne sprawdzone w QuickMap (frontend pokazuje ostrzeżenie przy `false`).
+- `coordsVerified` — czy współrzędne sprawdzone w QuickMap (frontend pokazuje ostrzeżenie przy `false`). Potwierdzone są `connecting-ridge`, `shackleton-rim`, `mons-mouton` i `chandrayaan-3`.
 - `precomputed` — czy maska horyzontu i efemerydy są policzone z wyprzedzeniem (szybka symulacja).
 
 ### 4.2 `GET /sites/{id}` — szczegóły miejsca
@@ -542,24 +543,51 @@ Czasy etapów to **szacunki planistyczne** (stałe w konfiguracji), nie obliczon
   "ephemeris": { "name": "JPL Horizons API", "version": "1.3", "model": "DE441", "retrievedAt": "2026-11-12" },
   "terrain":   { "name": "LOLA DEM (NASA GSFC PGDA)", "nearFieldM": 5, "farFieldM": 20, "maxDistanceKm": 150 },
   "basemap":   { "name": "Moon Trek WMTS" },
-  "lunarPolarVisibility": { "name": "LOLA Lunar Polar Illumination", "source": "NASA GSFC PGDA", "averagingPeriodYears": 18.6, "coverage": "65-90 degrees north and south" },
-  "validationRefs": ["PGDA illumination map", "LROC WAC south pole illumination (88–90°S, 100 m/px)"]
+  "lunarPolarVisibility": { "name": "LOLA Lunar Polar Illumination", "source": "NASA GSFC PGDA", "averagingPeriodYears": 18.6, "coverage": "65-90 degrees north and south", "resolutionM": [60, 120, 240] },
+  "validationRefs": ["JPL Horizons DE441 with NASA Moon Trek LOLA horizon", "NASA GSFC PGDA Lunar Polar Illumination"]
 }
 ```
 
-`GET /validation?lat=&lon=`:
+`GET /validation?lat=&lon=&start=2027-01-01` (start jest opcjonalny):
 
 ```json
 {
-  "avgIlluminationPct": { "horizon": 72.4, "pgda": 70.1, "lrocWac": 74.0 },
-  "earthVisibilityPct": { "horizon": 58.0, "pgda": 56.5 },
-  "deltaMaxPts": 2.3,
+  "avgIlluminationPct": { "horizon": 0.0, "pgda": 0.0, "lrocWac": null },
+  "earthVisibilityPct": { "horizon": 0.0, "pgda": 0.0 },
+  "deltaMaxPts": 0.0,
   "withinTolerance": true,
-  "tolerancePts": 5
+  "tolerancePts": 5.0,
+  "periodStart": "2027-01-01",
+  "periodEnd": "2028-01-01",
+  "periodDays": 365,
+  "samplingStepHours": 1.0,
+  "heightM": 0.0,
+  "lrocWacNote": "no full-coverage WAC illumination raster available",
+  "horizonDemVersion": "LRO_LOLA_DEM_SPole45_100mp_v04",
+  "horizonDemResolutionM": 100.0,
+  "pgdaVersion": {
+    "illumination": "AVGVISIB_75S_120M_201608",
+    "earthVisibility": "AVGVISIB_75S_120M_201608_EARTH"
+  }
 }
 ```
 
-Średnie liczone po **pełnym cyklu** (rok lub dłużej), żeby były porównywalne z mapami PGDA/LROC. Ten endpoint to argument na nagrodę *Best Use of Science* — jedna liczba „różnica ≤ X pkt” na slajdzie.
+Wartości `0.0` w przykładzie są placeholderami pokazującymi kształt odpowiedzi.
+Horizon liczy udział widocznej tarczy Słońca i widoczność tarczy Ziemi z
+efemeryd JPL Horizons oraz maski z LOLA DEM; próbkowanie odbywa się co godzinę
+przez pełny rok kalendarzowy. Domyślny przedział to 2027-01-01–2028-01-01;
+`periodEnd` jest wyłączny, a `start` pozwala wybrać inny początek roku.
+Obserwator Horizons i profil terenu mają tę samą wysokość `heightM: 0`.
+`periodDays` wynosi 365 albo 366, zależnie od wybranego roku przestępnego.
+PGDA `AVGVISIB` jest średnią z cyklu 18,6 roku, więc różnica względem rocznego
+Horizon jest naturalna. `deltaMaxPts` to największa bezwzględna różnica
+Horizon–PGDA dla oświetlenia i widoczności Ziemi; `withinTolerance` sprawdza
+próg 5 punktów procentowych. Punkty poza zakresem PGDA (|lat| < 65°) zwracają
+`422 OUT_OF_PGDA_COVERAGE`; piksele NoData wewnątrz pokrycia dają `null` dla
+wartości PGDA, delty i werdyktu. Pełnego rastra oświetlenia LROC WAC nie udało się potwierdzić,
+dlatego `lrocWac` pozostaje `null` zamiast zastępować go danymi PGDA.
+Punkt PGDA jest próbkowany z tego samego produktu i według tej samej reguły co
+warstwy `/layers`, aby wynik walidacji był z nimi zgodny.
 
 ### 4.14 Async: `GET /jobs/{id}`
 
@@ -734,9 +762,9 @@ Obecna implementacja udostępnia `GET /health`, `GET /sites`,
 `GET /sites/{id}`, `GET /terrain/point`, `GET /terrain/heightmap`,
 `GET /horizon`, `GET /ephemeris`, `POST /simulations`,
 `GET /simulations/{id}`, `POST /calendar`, `POST /scenarios/compare`,
-`GET /layers`, `GET /layers/{id}/grid` i `GET /meta/sources`. Katalog ma te
-same 19 wpisów co frontend; jego współrzędne pozostają przybliżone
-(`coordsVerified: false`).
+`POST /nearby`, `GET /layers`, `GET /layers/{id}/grid`, `GET /meta/sources`
+i `GET /validation`. Katalog ma te same 19 wpisów co frontend; cztery miejsca
+demo sprawdzono w LROC QuickMap i zwracają `coordsVerified: true`.
 
 `/terrain/point` pobiera wartości z NASA Moon Trek ImageServer: DEM biegunowe
 LOLA ma rozdzielczość 100 m/px, a globalny DEM 256 px/stopień. Nie jest to

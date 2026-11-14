@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from datetime import datetime, time, timedelta, timezone
+from datetime import datetime, time, timezone
 
 from fastapi import APIRouter, HTTPException
 
@@ -8,113 +8,15 @@ from app.api_utils import API_PREFIX, normalize_longitude
 from app.calendar import (
     CALENDAR_STEP_MIN,
     MAX_CALENDAR_DAYS,
-    MAX_EPHEMERIS_SAMPLES,
     CalendarRequest,
     build_calendar_result,
 )
+from app.ephemeris_sampling import fetch_ephemeris_range as _fetch_calendar_ephemeris
 from app.horizon_source import fetch_horizon
 from app.sites import SITE_BY_ID
-from app.sources import fetch_ephemeris
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix=API_PREFIX)
-
-
-async def _fetch_calendar_ephemeris(
-    lat: float,
-    lon: float,
-    start: datetime,
-    total_samples: int,
-    step_min: int,
-) -> dict[str, dict[str, list[float]]]:
-    step = timedelta(minutes=step_min)
-    chunks = []
-    start_index = 0
-    while start_index < total_samples:
-        end_index = min(
-            start_index + MAX_EPHEMERIS_SAMPLES - 1,
-            total_samples - 1,
-        )
-        chunks.append((start_index, end_index))
-        if end_index == total_samples - 1:
-            break
-        start_index = end_index
-
-    responses = await asyncio.gather(
-        *(
-            fetch_ephemeris(
-                lat,
-                lon,
-                start + step * start_index,
-                start + step * end_index,
-                step_min,
-                {"sun", "earth"},
-            )
-            for start_index, end_index in chunks
-        )
-    )
-    merged = {
-        body: {"azDeg": [], "elDeg": []}
-        for body in ("sun", "earth")
-    }
-    for chunk_index, ((start_index, end_index), response) in enumerate(
-        zip(chunks, responses)
-    ):
-        expected_count = end_index - start_index + 1
-        skip_first = 1 if chunk_index else 0
-        for body in ("sun", "earth"):
-            for field in ("azDeg", "elDeg"):
-                try:
-                    values = response[body][field]
-                except (KeyError, TypeError) as exc:
-                    logger.exception("JPL Horizons returned incomplete calendar data.")
-                    raise HTTPException(
-                        status_code=502,
-                        detail={
-                            "code": "UPSTREAM_ERROR",
-                            "message": "JPL Horizons returned incomplete calendar data.",
-                            "field": None,
-                            "retryAfterS": 5,
-                        },
-                    ) from exc
-                if len(values) != expected_count:
-                    logger.error(
-                        "JPL Horizons returned an unexpected calendar sample count "
-                        "for %s.%s: expected %s, received %s.",
-                        body,
-                        field,
-                        expected_count,
-                        len(values),
-                    )
-                    raise HTTPException(
-                        status_code=502,
-                        detail={
-                            "code": "UPSTREAM_ERROR",
-                            "message": "JPL Horizons returned an unexpected calendar sample count.",
-                            "field": None,
-                            "retryAfterS": 5,
-                        },
-                    )
-                merged[body][field].extend(values[skip_first:])
-    if any(
-        len(merged[body][field]) != total_samples
-        for body in ("sun", "earth")
-        for field in ("azDeg", "elDeg")
-    ):
-        logger.error(
-            "JPL Horizons returned an incomplete calendar range: expected %s samples.",
-            total_samples,
-        )
-        raise HTTPException(
-            status_code=502,
-            detail={
-                "code": "UPSTREAM_ERROR",
-                "message": "JPL Horizons returned an incomplete calendar range.",
-                "field": None,
-                "retryAfterS": 5,
-            },
-        )
-    return merged
 
 
 @router.post("/calendar")

@@ -1,3 +1,5 @@
+import asyncio
+
 import numpy as np
 from affine import Affine
 from fastapi.testclient import TestClient
@@ -6,6 +8,8 @@ from rasterio.io import MemoryFile
 from app.main import app
 from app.visibility_grid_source import (
     _sample_visibility_dataset,
+    fetch_visibility_point,
+    _visibility_point_product,
     _visibility_product,
 )
 
@@ -59,6 +63,50 @@ def test_visibility_product_selects_matching_hemisphere_and_coverage():
     assert north["version"] == "AVGVISIB_75N_120M_201608_EARTH"
     assert north["projection"] == "north-polar"
     assert _visibility_product("illumination", -64, 5) is None
+
+
+def test_visibility_point_product_uses_grid_product_selection():
+    south = _visibility_point_product("illumination", -89.45)
+    mid_latitude = _visibility_point_product("earth-visibility", -69.4)
+
+    assert south["version"] == "AVGVISIB_75S_120M_201608"
+    assert south["resolutionM"] == 120
+    assert mid_latitude["version"] == "AVGVISIB_65S_240M_201608_EARTH"
+    assert mid_latitude["resolutionM"] == 240
+    assert _visibility_point_product("illumination", 0) is None
+
+
+def test_visibility_point_reads_the_exact_query_coordinate(monkeypatch):
+    seen = []
+    stored = []
+
+    def fake_read(lat, lon, size_km, res, product):
+        seen.append((lat, lon, size_km, res, product["version"]))
+        return [[67.25]]
+
+    monkeypatch.setattr(
+        "app.visibility_grid_source.get_persisted_cache",
+        lambda _key: None,
+    )
+    monkeypatch.setattr(
+        "app.visibility_grid_source.set_persisted_cache",
+        lambda key, value, ttl: stored.append((key, value, ttl)),
+    )
+    monkeypatch.setattr(
+        "app.visibility_grid_source._read_visibility_grid_values",
+        fake_read,
+    )
+
+    result = asyncio.run(
+        fetch_visibility_point("illumination", -89.45, -137.3)
+    )
+
+    assert result["valuePct"] == 67.25
+    assert result["version"] == "AVGVISIB_75S_120M_201608"
+    assert seen == [
+        (-89.45, -137.3, 0, 1, "AVGVISIB_75S_120M_201608")
+    ]
+    assert stored[0][1] == result
 
 
 def test_visibility_grid_endpoints_share_layer_contract(monkeypatch):

@@ -49,6 +49,12 @@ def _visibility_product(
     }
 
 
+def _visibility_point_product(
+    layer_id: str, lat: float
+) -> dict[str, Any] | None:
+    return _visibility_product(layer_id, lat, 0)
+
+
 def _sample_visibility_dataset(
     dataset: Any, projected_x: Any, projected_y: Any
 ) -> list[list[float | None]]:
@@ -219,6 +225,48 @@ async def fetch_visibility_grid(
         "northUp": True,
         "source": VISIBILITY_GRID_SOURCE,
         "version": version,
+    }
+    set_persisted_cache(cache_key, result, VISIBILITY_GRID_CACHE_TTL)
+    return result
+
+
+async def fetch_visibility_point(
+    layer_id: str, lat: float, lon: float
+) -> dict[str, Any]:
+    product = _visibility_point_product(layer_id, lat)
+    version = product["version"] if product is not None else None
+    cache_key = f"visibilitypoint:{layer_id}:{version or 'no-coverage'}:{lat:.5f}:{lon:.5f}"
+    cached = get_persisted_cache(cache_key)
+    if cached is not None:
+        return cached[0]
+
+    if product is None:
+        value = None
+    else:
+        try:
+            values = await asyncio.to_thread(
+                _read_visibility_grid_values,
+                lat,
+                lon,
+                0,
+                1,
+                product,
+            )
+        except VisibilityGridDataError as exc:
+            raise _upstream_error(
+                "The PGDA visibility raster could not be reached or processed.",
+                cause=exc,
+            ) from exc
+        value = values[0][0]
+
+    result = {
+        "layerId": layer_id,
+        "lat": lat,
+        "lon": lon,
+        "valuePct": value,
+        "source": VISIBILITY_GRID_SOURCE,
+        "version": version,
+        "resolutionM": product["resolutionM"] if product is not None else None,
     }
     set_persisted_cache(cache_key, result, VISIBILITY_GRID_CACHE_TTL)
     return result

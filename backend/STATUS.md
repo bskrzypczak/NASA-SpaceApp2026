@@ -9,12 +9,15 @@ Aktualizacja: 2026-11-14
   `/api/v1/horizon`, `/api/v1/ephemeris`, `/api/v1/simulations`,
   `/api/v1/simulations/{id}`, `/api/v1/calendar`,
   `/api/v1/scenarios/compare`, `/api/v1/nearby`, `/api/v1/layers`,
-  `/api/v1/layers/{id}/grid` i `/api/v1/meta/sources`.
+  `/api/v1/layers/{id}/grid`, `/api/v1/meta/sources` i `/api/v1/validation`.
 - Rozdzielono routery symulacji i kalendarza od konfiguracji aplikacji oraz
   wydzielono obliczenia heightmapy i horyzontu do osobnych modułów źródeł.
   Żaden plik Python w `backend/app` nie przekracza 700 linii.
-- Dodano katalog 19 miejsc zgodny z frontendem. Ich współrzędne są nadal
-  przybliżone (`coordsVerified: false`).
+- Dodano katalog 19 miejsc zgodny z frontendem. Współrzędne czterech miejsc
+  demo (`connecting-ridge`, `shackleton-rim`, `mons-mouton`, `chandrayaan-3`)
+  sprawdzono w LROC QuickMap; pozostałe nadal mają
+  `coordsVerified: false`. Chandrayaan-3 używa współrzędnych landera Vikram
+  odczytanych z QuickMap: `(-69.374, 32.3187)`.
 - Podłączono rzeczywiste źródła: DEM LOLA przez NASA Moon Trek oraz efemerydy
   z JPL Horizons (DE441). Odpowiedzi są cache'owane, a błędy źródeł zgłaszane.
 - Poprawiono próbkowanie DEM w `/terrain/point`: biegunowe usługi Moon Trek
@@ -70,11 +73,24 @@ Aktualizacja: 2026-11-14
   właściwej półkuli i pasma szerokości, a wartości są skalowane metadanymi
   GeoTIFF. Poza pokryciem polarnym i w NoData odpowiedź zawiera `null`.
   Siatki widoczności są cache'owane na dysku przez 24 h.
+- Dodano `GET /api/v1/validation`: średnia widoczność tarczy Słońca i Ziemi
+  z JPL Horizons oraz maski LOLA jest liczona co godzinę przez pełny rok
+  kalendarzowy. Porównanie PGDA korzysta z punktów rastrów `AVGVISIB`
+  (120/240 m/px, ten sam dobór produktu co `/layers`) z cyklu 18,6-letniego;
+  `periodDays`, zakres dat i `heightM: 0`
+  są jawnie zwracane. `deltaMaxPts` jest maksimum różnic Horizon–PGDA dla
+  oświetlenia i widoczności Ziemi; tolerancja wynosi 5 pkt proc. Pole
+  `lrocWac` pozostaje `null` z notą o braku potwierdzonego rastra WAC
+  obejmującego pełny okres. Punkty poza pasmem PGDA zwracają jawne
+  `422 OUT_OF_PGDA_COVERAGE`. Cache wyniku przetrwa restart serwera.
+- Live `/validation` dla Connecting Ridge: Horizon `71.47%` vs PGDA `67.704%`
+  (oświetlenie), `52.53%` vs `52.296%` (widoczność Ziemi);
+  `deltaMaxPts=3.77`, `withinTolerance=true`, `periodDays=365`.
 - Rasterio 1.4.4 działa w `C:\Users\joasi\Documents\PP\SEM_2\.venv`.
   Podłączono odczyt wartości `inPermanentShadow` z rastra PSR PGDA (20 m/px,
   80–90°S); piksele NoData i punkty poza zasięgiem pozostają `null`. Live
   sprawdzono wynik `true` dla `(-88, 0)` i `false` dla `(-89.45, -137.3)`.
-- Pełny zestaw testów backendu: `78 passed`, 1 ostrzeżenie deprecacyjne
+- Pełny zestaw testów backendu: `84 passed`, 1 ostrzeżenie deprecacyjne
   Starlette/httpx.
 - Live dla `(-89.45, -137.3)`: DEM zwrócił wysokość `1956 m`, próbki N/S/E/W
   `1954`, `1955.5`, `1953` i `1952.5 m`, a nachylenie `0.453°`.
@@ -120,10 +136,6 @@ Aktualizacja: 2026-11-14
 
 ## Do zrobienia
 
-- Następnie `/validation`: porównać średnie oświetlenie z obliczeń backendu,
-  PGDA i LROC oraz zwrócić jedną liczbę do prezentacji.
-- Zweryfikować współrzędne czterech miejsc demo na niezależnym źródle i dopiero
-  wtedy ustawić im `coordsVerified: true`.
 - Kafelki mapowe (`/layers/{layer}/tiles/...`) nadal nie są serwowane; aktualny
   kontrakt warstw opiera się na siatkach `/layers/{id}/grid`.
 - Zweryfikować wysokości i nachylenie na kolejnych niezależnych punktach
@@ -148,5 +160,6 @@ Aktualizacja: 2026-11-14
   a czas odczytu zależy od dostępności serwera PGDA.
 - Siatki oświetlenia i widoczności Ziemi korzystają z produktów PGDA dla
   regionów polarnych 65–90°N/S; poza nimi zwracają `null`. Używane mapy mają
-  rozdzielczość 120 lub 240 m/px, a nie deklarowaną w pierwotnym kontrakcie
-  LROC WAC 100 m/px.
+  rozdzielczość 120 lub 240 m/px. `/validation` próbkuje dokładny punkt z
+  rastra wybieranego tą samą regułą co `/layers`. Nie ma potwierdzonego
+  pełnego czasowo rastra LROC WAC, dlatego endpoint jawnie zwraca `lrocWac: null`.

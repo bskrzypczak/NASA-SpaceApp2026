@@ -20,8 +20,9 @@ from app.layer_grid_source import (
 )
 from app.nearby_routes import router as nearby_router
 from app.simulation_routes import router as simulation_router
-from app.sites import FEATURED_IDS, SITE_BY_ID, SITES
+from app.sites import COORDS_VERIFIED_IDS, FEATURED_IDS, SITE_BY_ID, SITES
 from app.sources import fetch_ephemeris, fetch_lunar_elevation
+from app.validation_routes import router as validation_router
 from app.visibility_grid_source import fetch_visibility_grid
 
 LUNAR_RADIUS_KM = 1737.4
@@ -130,7 +131,7 @@ def lunar_distance_km(lat1: float, lon1: float, lat2: float, lon2: float) -> flo
 def public_site(site: dict) -> dict:
     return {
         **site,
-        "coordsVerified": False,
+        "coordsVerified": site["id"] in COORDS_VERIFIED_IDS,
         "precomputed": False,
     }
 
@@ -398,6 +399,7 @@ async def get_ephemeris(
 app.include_router(simulation_router)
 app.include_router(calendar_router)
 app.include_router(nearby_router)
+app.include_router(validation_router)
 
 
 @app.get(f"{API_PREFIX}/layers")
@@ -513,7 +515,11 @@ async def get_sources() -> dict:
             "source": "NASA GSFC PGDA",
             "averagingPeriodYears": 18.6,
             "coverage": "65-90 degrees north and south",
-            "resolutionM": [120, 240],
+            "resolutionM": [60, 120, 240],
             "url": "https://pgda.gsfc.nasa.gov/products/69",
         },
+        "validationRefs": [
+            "JPL Horizons DE441 with NASA Moon Trek LOLA horizon",
+            "NASA GSFC PGDA Lunar Polar Illumination",
+        ],
     }

@@ -98,8 +98,8 @@ SITES: list[dict[str, Any]] = [
         "program": "ISRO",
         "group": "Other nations",
         "status": "landed 2023",
-        "lat": -69.4,
-        "lon": 32.3,
+        "lat": -69.374,
+        "lon": 32.3187,
         "region": "South pole",
     },
     {
@@ -199,6 +199,13 @@ FEATURED_IDS = {
     "mons-mouton",
     "chandrayaan-3",
     "apollo-11",
+}
+
+COORDS_VERIFIED_IDS = {
+    "connecting-ridge",
+    "shackleton-rim",
+    "mons-mouton",
+    "chandrayaan-3",
 }
 
 SITE_BY_ID = {site["id"]: site for site in SITES}
