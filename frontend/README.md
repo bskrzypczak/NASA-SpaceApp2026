@@ -98,6 +98,15 @@ Wejścia: „Compare landing dates” na ekranie Site, „Compare dates” i „
 - Wyniki kalendarza są cache'owane w przeglądarce per zapytanie. Kalendarz liczy co godzinę, symulacja co 10 min — dzień może się różnić o 1–2 pkt.
 - Pole `season` z backendu celowo nie jest pokazywane (zobacz notatkę dla backendu).
 
+## Ekran 9 · Scenarios (`/scenarios`)
+
+Wejścia: zakładka **Scenarios** w top barze, „Scenarios” na ekranie Simulation, „+ Add to comparison” w kalendarzu.
+
+- Lista 2–4 scenariuszy (pierwszy = baseline z bieżącego wyboru). Szybkie dodawanie: **Slip +1/+2/+4 wk**, **inne miejsce z katalogu** (ta sama data), **bieżący wybór**. Nazwy edytowalne (unikalność pilnujemy przy wysyłce).
+- **Wymagania**: min. bateria i min. % Ziemi → `requirements` w `POST /scenarios/compare`.
+- Wynik: kolumny ze szansą, werdyktem, różnicą do baseline, ✓/! przy metrykach z wymagań, „Open simulation” (wynik z backendu po `simulationId`); pasy okien pracy (Sun+Earth / Sun / Earth / dark) z kreską końca misji; **rekomendacja** backendu (reguła: najlepszy spełniający wymagania, przy różnicy < 3 pkt wygrywa bez zmiany daty).
+- Po zmianie listy wyniki są oznaczane jako nieaktualne do ponownego „Compare”. Wyniki cache'owane per zapytanie.
+
 ## Backend i tryby API
 
 Skopiuj `.env.example` do `.env.local`:

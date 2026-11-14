@@ -1,4 +1,4 @@
-import type { CalendarRequest, CalendarResult, Heightmap, HorizonProfile, SimulationRequest, SimulationResult, TerrainPoint } from './types';
+import type { CalendarRequest, CalendarResult, Heightmap, HorizonProfile, ScenarioCompareRequest, ScenarioCompareResponse, SimulationRequest, SimulationResult, TerrainPoint } from './types';
 import { DEFAULT_HARDWARE, DEFAULT_WEIGHTS, calculateCase, interpolateHorizon } from '../lib/simModel';
 
 /** Small deterministic PRNG so the same point always gives the same mock terrain. */
@@ -179,4 +179,32 @@ export function mockCalendar(req: CalendarRequest): CalendarResult {
     bestPct: Math.max(...ds.map((d) => d.successPct)),
   }));
   return { days, best: { date: best.date, successPct: best.successPct }, months, mock: true };
+}
+
+/** Mock /scenarios/compare — same recommendation rule as backend/app/scenarios.py. */
+export function mockCompare(req: ScenarioCompareRequest): ScenarioCompareResponse {
+  const results = req.scenarios.map((sc) => {
+    const offsetDays = (Date.parse(sc.landingTime) - Date.parse('2027-01-01T00:00:00Z')) / 86_400_000;
+    const sim = mockSimulation({ ...sc, includeTimeseries: false, phaseOffsetDays: offsetDays } as SimulationRequest & { phaseOffsetDays: number });
+    return {
+      label: sc.label,
+      simulationId: sim.id,
+      summary: sim.summary,
+      windows: sim.windows,
+      meetsRequirements: sim.summary.minSocPct >= req.requirements.minSocPct && sim.summary.earthVisiblePct >= req.requirements.minEarthVisiblePct,
+    };
+  });
+  const eligible = results.map((r, i) => (r.meetsRequirements ? i : -1)).filter((i) => i >= 0);
+  let recommendation: ScenarioCompareResponse['recommendation'] = null;
+  if (eligible.length) {
+    const best = Math.max(...eligible.map((i) => results[i].summary.successPct));
+    const close = eligible.filter((i) => best - results[i].summary.successPct < 3);
+    const baseDate = req.scenarios[0].landingTime.slice(0, 10);
+    const same = close.filter((i) => req.scenarios[i].landingTime.slice(0, 10) === baseDate);
+    const pool = same.length ? same : close;
+    const sel = pool.reduce((a, b) => (results[b].summary.successPct > results[a].summary.successPct ? b : a));
+    const score = results[sel].summary.successPct;
+    recommendation = { label: results[sel].label, reason: same.length ? `Scores ${score}% on the baseline date — no launch slip needed.` : `Scores ${score}% and meets all requirements.` };
+  }
+  return { results, recommendation, mock: true };
 }

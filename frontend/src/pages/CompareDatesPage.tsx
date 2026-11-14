@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { ApiError, apiMode, getCalendar } from '../api/client';
 import type { CalendarDay, CalendarRequest, CalendarResult, HorizonModel } from '../api/types';
 import { useSelection } from '../store/selection';
+import { useScenarios } from '../store/scenarios';
 import { defaultHorizonModel, siteRef } from '../lib/requests';
 import { toQuery } from '../lib/coords';
 
@@ -106,6 +107,15 @@ export function CompareDatesPage() {
   const loading = yearCovers ? false : months.loading;
   const error = yearCovers ? null : months.error;
   const coverage = error instanceof ApiError && error.code === 'OUT_OF_DEM_COVERAGE';
+
+  const addScenario = useScenarios((s) => s.add);
+  const scenarioCount = useScenarios((s) => s.items.length);
+  function addToComparison(date: string) {
+    const lt = sel.landingTime;
+    if (scenarioCount === 0) addScenario({ label: 'Baseline', name: sel.name, lat: sel.lat, lon: sel.lon, landingTime: lt, missionDays: sel.missionDays });
+    addScenario({ label: `Land ${date.slice(5)}`, name: sel.name, lat: sel.lat, lon: sel.lon, landingTime: `${date}T${lt.slice(11, 16)}`, missionDays: sel.missionDays });
+    navigate('/scenarios');
+  }
 
   function applyDate(date: string, go: 'simulate' | 'site') {
     sel.setMission({ landingTime: `${date}T${sel.landingTime.slice(11, 16)}` });
@@ -250,6 +260,9 @@ export function CompareDatesPage() {
               </button>
               <button type="button" className="btn" onClick={() => applyDate(pick.date, 'site')} disabled={pick.date === yourDate}>
                 Set as landing date
+              </button>
+              <button type="button" className="btn" onClick={() => addToComparison(pick.date)} disabled={pick.date === yourDate}>
+                + Add to comparison
               </button>
             </>
           ) : (

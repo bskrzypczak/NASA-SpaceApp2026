@@ -1,6 +1,6 @@
-import type { ApiErrorBody, ApiSite, CalendarRequest, CalendarResult, Heightmap, HorizonProfile, LayerInfo, SimulationRequest, SimulationResult, TerrainPoint } from './types';
+import type { ApiErrorBody, ApiSite, CalendarRequest, CalendarResult, ScenarioCompareRequest, ScenarioCompareResponse, Heightmap, HorizonProfile, LayerInfo, SimulationRequest, SimulationResult, TerrainPoint } from './types';
 import { SITES } from '../data/sites';
-import { mockCalendar, mockHeightmap, mockHorizon, mockSimulation, mockTerrainPoint } from './mocks';
+import { mockCalendar, mockCompare, mockHeightmap, mockHorizon, mockSimulation, mockTerrainPoint } from './mocks';
 
 const BASE = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '');
 const USE_MOCKS = import.meta.env.VITE_USE_MOCKS === 'true';
@@ -159,6 +159,23 @@ export async function getCalendar(req: CalendarRequest, signal?: AbortSignal): P
   if (apiMode === 'mock') {
     await new Promise((r) => setTimeout(r, 500));
     return mockCalendar(req);
+  }
+  throw new ApiError('BACKEND_OFFLINE', 'No backend configured. Set VITE_API_URL or VITE_USE_MOCKS=true in .env.local.');
+}
+
+/** POST /scenarios/compare — 2–4 simulations in parallel on the backend (can take tens of seconds). */
+export async function compareScenarios(req: ScenarioCompareRequest, signal?: AbortSignal): Promise<ScenarioCompareResponse> {
+  if (apiMode === 'live') return post<ScenarioCompareResponse>('/scenarios/compare', req, signal);
+  if (apiMode === 'mock') {
+    await new Promise((r) => setTimeout(r, 800));
+    const res = mockCompare(req);
+    // Keep full mock simulations so "Open simulation" works in mock mode too.
+    req.scenarios.forEach((sc, i) => {
+      const offsetDays = (Date.parse(sc.landingTime) - Date.parse('2027-01-01T00:00:00Z')) / 86_400_000;
+      const sim = mockSimulation({ ...sc, includeTimeseries: true, phaseOffsetDays: offsetDays } as SimulationRequest & { phaseOffsetDays: number });
+      mockStore.set(res.results[i].simulationId, { ...sim, id: res.results[i].simulationId });
+    });
+    return res;
   }
   throw new ApiError('BACKEND_OFFLINE', 'No backend configured. Set VITE_API_URL or VITE_USE_MOCKS=true in .env.local.');
 }

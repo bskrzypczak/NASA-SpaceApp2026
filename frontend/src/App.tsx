@@ -6,6 +6,7 @@ import { SitePage } from './pages/SitePage';
 import { SiteConfirmModal } from './pages/SiteConfirmModal';
 import { SimulationNewPage, SimulationPage } from './pages/SimulationPage';
 import { CompareDatesPage } from './pages/CompareDatesPage';
+import { ScenariosPage } from './pages/ScenariosPage';
 
 function Layout() {
   return (
@@ -38,6 +39,7 @@ export default function App() {
           <Route path="confirm" element={<SiteConfirmModal />} />
         </Route>
         <Route path="dates" element={<CompareDatesPage />} />
+        <Route path="scenarios" element={<ScenariosPage />} />
         <Route path="simulation/new" element={<SimulationNewPage />} />
         <Route path="simulation/:id" element={<SimulationPage />} />
         <Route path="*" element={<NotFound />} />

@@ -159,8 +159,10 @@ export function calculateCase(c: CaseInput) {
     earth: visibilityWindows(earthClear, stepDays, c.windowDays),
     both: visibilityWindows(bothClear, stepDays, c.windowDays),
   };
-  const mSun = visibilityWindows(sunClear, stepDays, c.missionDays);
-  const mEarth = visibilityWindows(earthClear, stepDays, c.missionDays);
+  // Mission metrics only see samples up to the mission boundary (+1), like the backend fix.
+  const m = Math.round((c.missionDays * 1440) / c.stepMin) + 1;
+  const mSun = visibilityWindows(sunClear.slice(0, m), stepDays, c.missionDays);
+  const mEarth = visibilityWindows(earthClear.slice(0, m), stepDays, c.missionDays);
   const { soc, finalSoc } = batteryHistory(sunFrac, c.hardware, c.stepMin / 60);
   const missionSoc: [number, number][] = soc.map((v, i) => [days[i], v] as [number, number]).filter(([d]) => d <= c.missionDays);
   if (c.missionDays === c.windowDays) missionSoc.push([c.windowDays, finalSoc]);
@@ -189,7 +191,7 @@ export function calculateCase(c: CaseInput) {
     verdict,
     sunlitPct: +windowPercent(mSun, c.missionDays).toFixed(2),
     earthVisiblePct: +earthPct.toFixed(2),
-    bothPct: +windowPercent(visibilityWindows(bothClear, stepDays, c.missionDays), c.missionDays).toFixed(2),
+    bothPct: +windowPercent(visibilityWindows(bothClear.slice(0, m), stepDays, c.missionDays), c.missionDays).toFixed(2),
     minSocPct: +minSoc.toFixed(2),
     minSocAtDay: +minSocDay.toFixed(4),
     longestNightH: +nightH.toFixed(2),

@@ -12,7 +12,7 @@ import { SimScene3D, VERTICAL_EXAGGERATION, type CameraMode } from '../component
 import { SkyView } from '../components/sim/SkyView';
 import { StatusCards, SuccessCard, Timeline } from '../components/sim/SimPanels';
 import { DEFAULT_HARDWARE } from '../lib/simModel';
-import { TERRAIN_LIMIT_NOTE, defaultHorizonModel, siteRef } from '../lib/requests';
+import { defaultHorizonModel, siteRef } from '../lib/requests';
 
 const WINDOW_DAYS = 30;
 const STEP_MIN = 10; // 30 d × 144 = 4320 samples = backend limit
@@ -26,7 +26,6 @@ function requestFromSelection(sel: SelectionState, horizonModel?: HorizonModel):
     missionDays: sel.missionDays,
     windowDays: WINDOW_DAYS,
     stepMin: STEP_MIN,
-    // Real terrain needs the polar DEM (≤ 80° S); elsewhere fall back to a flat horizon.
     horizonModel: horizonModel ?? defaultHorizonModel(sel.lat),
     includeTimeseries: true,
   };
@@ -226,18 +225,13 @@ export function SimulationPage() {
           </button>
         </div>
         <div className="segmented" role="group" aria-label="Horizon model">
-          <button type="button" aria-pressed={!showFlat && baseIsReal} disabled={!baseIsReal} onClick={() => toggleHorizon(false)} title={baseIsReal ? '' : TERRAIN_LIMIT_NOTE}>
+          <button type="button" aria-pressed={!showFlat && baseIsReal} disabled={!baseIsReal} onClick={() => toggleHorizon(false)} title={baseIsReal ? '' : 'This run used a flat horizon — run again for real terrain'}>
             Real terrain (LOLA)
           </button>
           <button type="button" aria-pressed={showFlat || !baseIsReal} onClick={() => toggleHorizon(true)}>
             {flatLoading ? 'Flat horizon…' : 'Flat horizon'}
           </button>
         </div>
-        {!baseIsReal && (
-          <span className="badge" role="note">
-            ⓘ {TERRAIN_LIMIT_NOTE}
-          </span>
-        )}
         {view === '3d' && (
           <div className="segmented" role="group" aria-label="Camera">
             {(['orbit', 'lander', 'top'] as CameraMode[]).map((c) => (
@@ -251,6 +245,9 @@ export function SimulationPage() {
           {(shown.mock || apiMode === 'mock') && <span className="badge badge--warn">MOCK DATA</span>}
           <Link to="/dates" className="btn">
             Compare dates
+          </Link>
+          <Link to="/scenarios" className="btn">
+            Scenarios
           </Link>
           <button type="button" className="btn" disabled title="Mission brief — next sprint">
             Mission brief
