@@ -84,6 +84,15 @@ Aktualizacja: 2026-11-14
   `0.749°`–`19.417°`, DEM `LRO_LOLA_DEM_SPole45_100mp_v04`.
 - Live `/layers/psr/grid` dla tego samego punktu i rozmiaru: 256 komórek
   pokrytych rastrem PGDA, wartości 0–1, w tym 4 komórki PSR.
+- Dodano synchroniczne `POST /api/v1/nearby` jako ograniczoną mapę 3×3:
+  symulowane są środek i do czterech punktów kardynalnych, a narożniki poza
+  promieniem nie są liczone. Nachylenie z DEM LOLA i PSR z PGDA wykluczają
+  komórki niebezpieczne lub bez danych. Sugestie porównują wynik, godziny
+  oświetlenia, minimalny stan baterii i widoczność Ziemi; krok symulacji to
+  60 minut. `grid.cellM` podaje rzeczywisty odstęp próbek po ograniczeniu
+  rozdzielczości.
+- Testy `/nearby` pokrywają limit siatki, wykluczenie PSR, sugestie rankingu
+  i walidację strefy czasowej.
 - Live `/terrain/heightmap`: HTTP 200 dla DEM południowego, północnego i
   globalnego; domyślna siatka południowa ma 256×256 próbek. JSON i PNG16
   zweryfikowano osobno. Na punkcie `(-89.45, -137.3)` interpolowane
@@ -103,8 +112,6 @@ Aktualizacja: 2026-11-14
 
 - Uzupełnić `GET /layers/{id}/grid` o `illumination` i `earth-visibility`
   z danych PGDA.
-- Następnie `POST /nearby`: mapa wrażliwości małych zmian położenia; ograniczyć
-  liczbę komórek lub uruchamiać obliczenia asynchronicznie.
 - Następnie `/validation`: porównać średnie oświetlenie z obliczeń backendu,
   PGDA i LROC oraz zwrócić jedną liczbę do prezentacji.
 - Zweryfikować współrzędne czterech miejsc demo na niezależnym źródle i dopiero

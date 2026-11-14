@@ -430,20 +430,22 @@ Odpowiedź:
 ```json
 {
   "grid": {
-    "originLat": -89.47, "originLon": -137.9, "cellM": 100, "cols": 50, "rows": 50,
-    "successPct": [[48, 51, "…"], "…"],
-    "excluded":   [[false, true, "…"], "…"]
+    "originLat": -89.47, "originLon": -137.9, "cellM": 2500, "cols": 3, "rows": 3,
+    "successPct": [[null, 62, null], [null, 50, 67], [null, 55, null]],
+    "excluded":   [[true, false, true], [true, false, false], [true, false, true]]
   },
   "center": { "successPct": 50 },
   "suggestions": [
-    { "rank": "A", "lat": -89.421, "lon": -136.09, "distanceKm": 2.1, "successPct": 91,
-      "why": ["+3.4 days of sunlight", "battery never below 48 %", "Earth link unchanged"] }
+    { "rank": "A", "lat": -89.421, "lon": -136.09, "distanceKm": 2.5, "successPct": 67,
+      "why": ["+3.4 days of sunlight", "+5.0 pp minimum battery charge"] }
   ]
 }
 ```
 
-- `excluded` — komórki z nachyleniem > `maxSlopeDeg` lub w PSR (no-go).
-- 2 500 komórek × symulacja → **zawsze async** (§5). Optymalizacja: maski horyzontu sąsiednich komórek są prawie takie same → licz rzadziej i interpoluj.
+- `excluded` — komórki poza `radiusKm`, z nachyleniem > `maxSlopeDeg`, w PSR lub bez danych terenu/PSR.
+- Endpoint działa synchronicznie i ogranicza obliczenie do siatki 3×3: środek i maksymalnie cztery punkty kardynalne są symulowane z krokiem 60 minut. Narożniki leżą poza kołowym promieniem i są wykluczone.
+- `cellM` jest przyjmowane jako żądana rozdzielczość, ale siatka jest celowo próbkowana rzadziej, aby uniknąć długiego obliczania setek symulacji. `grid.cellM` zwraca rzeczywisty odstęp próbek równy `radiusKm × 1000`.
+- `goal` zmienia wagi oceny (`balanced`: 0.5/0.3/0.2, `power`: 0.7/0.15/0.15, `comms`: 0.2/0.6/0.2). Sugestie uwzględniają wyłącznie punkty bez wykluczeń z wynikiem wyższym niż środek.
 
 ### 4.11 `GET /layers` — katalog warstw mapy
 

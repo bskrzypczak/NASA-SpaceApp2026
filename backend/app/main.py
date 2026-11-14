@@ -18,6 +18,7 @@ from app.layer_grid_source import (
     build_slope_grid,
     fetch_psr_grid,
 )
+from app.nearby_routes import router as nearby_router
 from app.simulation_routes import router as simulation_router
 from app.sites import FEATURED_IDS, SITE_BY_ID, SITES
 from app.sources import fetch_ephemeris, fetch_lunar_elevation
@@ -395,6 +396,7 @@ async def get_ephemeris(
 
 app.include_router(simulation_router)
 app.include_router(calendar_router)
+app.include_router(nearby_router)
 
 
 @app.get(f"{API_PREFIX}/layers")
