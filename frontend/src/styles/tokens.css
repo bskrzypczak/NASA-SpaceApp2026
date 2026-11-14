@@ -1,0 +1,38 @@
+/* NASA Space Apps brand tokens — one place to change colors and type. */
+:root {
+  /* Brand palette */
+  --deep-blue: #07173f;
+  --electric-blue: #0042a6;
+  --neon-blue: #0960e1;
+  --blue-yonder: #2e96f5;
+  --neon-yellow: #eafe07;
+  --rocket-red: #e43700;
+  --martian-red: #8e1100;
+  --white: #ffffff;
+
+  /* App roles */
+  --bg: var(--deep-blue);
+  --surface: #0b1a45;
+  --border: rgba(255, 255, 255, 0.16);
+  --border-strong: rgba(255, 255, 255, 0.3);
+  --text: var(--white);
+  --text-muted: #c9d6f0; /* passes 4.5:1 on Deep Blue */
+  --accent: var(--neon-yellow); /* ~10 % of the UI: buttons, links, key icons */
+  --sun: var(--neon-yellow);
+  --earth: var(--blue-yonder);
+  --danger-text: #ff7a4d; /* lighter Rocket Red for small text on dark */
+
+  /* Brand gradient (the only gradient allowed) */
+  --bg-gradient: linear-gradient(135deg, #0042a6 0%, #0a3487 22%, #0b2768 48%, #081d4f 72%, #07173f 100%);
+
+  /* Type */
+  --font-heading: 'Fira Sans', system-ui, sans-serif;
+  --font-body: 'Overpass', system-ui, sans-serif;
+  --font-mono: 'Fira Code', ui-monospace, monospace;
+
+  /* Shape */
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-pill: 999px;
+  --tap: 44px; /* minimum touch target */
+}

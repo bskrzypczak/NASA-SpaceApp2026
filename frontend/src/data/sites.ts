@@ -1,0 +1,43 @@
+/**
+ * Placeholder catalog. Coordinates are APPROXIMATE — verify each one in
+ * LROC QuickMap before using it for real calculations.
+ */
+export type SiteGroup = 'Artemis III' | 'CLPS' | 'Commercial' | 'Other nations' | 'Apollo';
+export type Region = 'South pole' | 'Near side' | 'Far side';
+
+export interface CatalogSite {
+  id: string;
+  name: string;
+  program: string;
+  group: SiteGroup;
+  status: string;
+  lat: number;
+  lon: number;
+  region: Region;
+}
+
+export const SITE_GROUPS: SiteGroup[] = ['Artemis III', 'CLPS', 'Commercial', 'Other nations', 'Apollo'];
+
+export const SITES: CatalogSite[] = [
+  { id: 'connecting-ridge', name: 'Connecting Ridge', program: 'Artemis III', group: 'Artemis III', status: 'candidate (2022 list)', lat: -89.45, lon: -137.3, region: 'South pole' },
+  { id: 'shackleton-rim', name: 'Shackleton rim', program: 'Artemis III', group: 'Artemis III', status: 'candidate area', lat: -89.67, lon: -163.0, region: 'South pole' },
+  { id: 'malapert-massif', name: 'Malapert Massif', program: 'Artemis III', group: 'Artemis III', status: 'candidate region', lat: -86.0, lon: 0.0, region: 'South pole' },
+  { id: 'haworth', name: 'Haworth', program: 'Artemis III', group: 'Artemis III', status: 'candidate region', lat: -87.4, lon: -5.0, region: 'South pole' },
+  { id: 'nobile-rim-1', name: 'Nobile Rim 1', program: 'Artemis III', group: 'Artemis III', status: 'candidate region', lat: -85.4, lon: 38.0, region: 'South pole' },
+  { id: 'mons-mouton', name: 'Mons Mouton', program: 'CLPS · IM-2 Athena', group: 'CLPS', status: 'landed 2025', lat: -84.8, lon: 29.0, region: 'South pole' },
+  { id: 'malapert-a', name: 'Malapert A', program: 'CLPS · IM-1 Odysseus', group: 'CLPS', status: 'landed 2024', lat: -80.1, lon: 1.4, region: 'South pole' },
+  { id: 'mare-crisium', name: 'Mare Crisium', program: 'CLPS · Blue Ghost M1', group: 'CLPS', status: 'landed 2025', lat: 18.6, lon: 61.8, region: 'Near side' },
+  { id: 'mare-frigoris', name: 'Mare Frigoris', program: 'ispace · Resilience', group: 'Commercial', status: 'lost on landing 2025', lat: 60.5, lon: -4.6, region: 'Near side' },
+  { id: 'chandrayaan-3', name: 'Chandrayaan-3', program: 'ISRO', group: 'Other nations', status: 'landed 2023', lat: -69.4, lon: 32.3, region: 'South pole' },
+  { id: 'change-4', name: 'Chang’e-4', program: 'CNSA', group: 'Other nations', status: 'landed 2019', lat: -45.4, lon: 177.6, region: 'Far side' },
+  { id: 'change-6', name: 'Chang’e-6', program: 'CNSA', group: 'Other nations', status: 'sample return 2024', lat: -41.6, lon: -154.0, region: 'Far side' },
+  { id: 'slim', name: 'SLIM', program: 'JAXA', group: 'Other nations', status: 'landed 2024', lat: -13.3, lon: 25.2, region: 'Near side' },
+  { id: 'apollo-11', name: 'Apollo 11', program: 'Apollo', group: 'Apollo', status: 'landed 1969', lat: 0.67, lon: 23.47, region: 'Near side' },
+  { id: 'apollo-12', name: 'Apollo 12', program: 'Apollo', group: 'Apollo', status: 'landed 1969', lat: -3.01, lon: -23.42, region: 'Near side' },
+  { id: 'apollo-14', name: 'Apollo 14', program: 'Apollo', group: 'Apollo', status: 'landed 1971', lat: -3.65, lon: -17.47, region: 'Near side' },
+  { id: 'apollo-15', name: 'Apollo 15', program: 'Apollo', group: 'Apollo', status: 'landed 1971', lat: 26.13, lon: 3.63, region: 'Near side' },
+  { id: 'apollo-16', name: 'Apollo 16', program: 'Apollo', group: 'Apollo', status: 'landed 1972', lat: -8.97, lon: 15.5, region: 'Near side' },
+  { id: 'apollo-17', name: 'Apollo 17', program: 'Apollo', group: 'Apollo', status: 'landed 1972', lat: 20.19, lon: 30.77, region: 'Near side' },
+];
+
+export const FEATURED_IDS = ['connecting-ridge', 'shackleton-rim', 'mons-mouton', 'chandrayaan-3', 'apollo-11'];
