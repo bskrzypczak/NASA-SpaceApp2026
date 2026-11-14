@@ -5,12 +5,16 @@ import { Moon3D } from '../components/moon/Moon3D';
 import { useSelection } from '../store/selection';
 import { SITES, FEATURED_IDS } from '../data/sites';
 import { toQuery, type LatLon } from '../lib/coords';
+import { useApi } from '../hooks/useApi';
+import { getTerrainPoint } from '../api/client';
 
 /** Screen 1 — pick a point on the Moon. */
 export function ExplorePage() {
   const navigate = useNavigate();
   const { lat, lon, selectSite } = useSelection();
   const featured = SITES.filter((s) => FEATURED_IDS.includes(s.id));
+  const terrain = useApi((signal) => getTerrainPoint(lat, lon, signal), [lat, lon]);
+  const elevationM = terrain.loading ? undefined : (terrain.data?.elevationM ?? null);
 
   function goToSite(point: LatLon) {
     // A point typed by hand is a custom site unless it matches the current one.
@@ -58,7 +62,7 @@ export function ExplorePage() {
         <Moon3D style={{ flex: '999 1 560px', minHeight: 560 }} />
       </div>
 
-      <CoordinateBar value={{ lat, lon }} onNext={goToSite} />
+      <CoordinateBar value={{ lat, lon }} onNext={goToSite} elevationM={elevationM} />
     </main>
   );
 }

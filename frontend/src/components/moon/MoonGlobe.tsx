@@ -73,7 +73,7 @@ function useScreenScale(ref: RefObject<Group>, base: number) {
   useFrame(({ camera }) => {
     if (!ref.current) return;
     const dist = camera.position.distanceTo(ref.current.getWorldPosition(new Vector3()));
-    ref.current.scale.setScalar(Math.max(0.02, Math.min(1.5, dist * base)));
+    ref.current.scale.setScalar(Math.max(0.0005, Math.min(1.5, dist * base)));
   });
 }
 

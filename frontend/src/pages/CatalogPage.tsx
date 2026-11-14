@@ -1,7 +1,10 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Placeholder } from '../components/Placeholder';
-import { SITES, SITE_GROUPS, type SiteGroup, type CatalogSite } from '../data/sites';
+import { SITE_GROUPS, type SiteGroup } from '../data/sites';
+import type { ApiSite } from '../api/types';
+import { getSites } from '../api/client';
+import { useApi } from '../hooks/useApi';
 import { useSelection } from '../store/selection';
 import { formatLat, formatLon, toQuery } from '../lib/coords';
 
@@ -13,10 +16,12 @@ export function CatalogPage() {
   const selectSite = useSelection((s) => s.selectSite);
   const [filter, setFilter] = useState<Filter>('All');
 
-  const rows = SITES.filter((s) => filter === 'All' || s.group === filter);
+  const sites = useApi((signal) => getSites(signal), []);
+  const all = sites.data?.items ?? [];
+  const rows = all.filter((s) => filter === 'All' || s.group === filter);
   const filters: Filter[] = ['All', ...SITE_GROUPS];
 
-  function open(site: CatalogSite) {
+  function open(site: ApiSite) {
     selectSite({ lat: site.lat, lon: site.lon, name: site.name });
     navigate(`/site${toQuery(site)}`);
   }
@@ -37,7 +42,7 @@ export function CatalogPage() {
             <div className="chips">
               {filters.map((f) => (
                 <button key={f} type="button" className="chip" aria-pressed={filter === f} onClick={() => setFilter(f)}>
-                  {f} <span className="mono" style={{ fontWeight: 400 }}>{f === 'All' ? SITES.length : SITES.filter((s) => s.group === f).length}</span>
+                  {f} <span className="mono" style={{ fontWeight: 400 }}>{f === 'All' ? all.length : all.filter((s) => s.group === f).length}</span>
                 </button>
               ))}
             </div>
@@ -47,8 +52,10 @@ export function CatalogPage() {
 
         <section style={{ flex: '999 1 640px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-            <strong>{rows.length} sites</strong>
-            <span className="muted" style={{ fontSize: 13 }}>Placeholder data · coordinates approximate, verify in LROC QuickMap</span>
+            <strong>{sites.loading ? 'Loading…' : `${rows.length} sites`}</strong>
+            <span className="muted" style={{ fontSize: 13 }}>
+              Source: {sites.data?.source ?? '…'} · coordinates approximate, verify in LROC QuickMap
+            </span>
           </div>
           <div className="table-wrap">
             <table>
@@ -66,7 +73,14 @@ export function CatalogPage() {
               <tbody>
                 {rows.map((s) => (
                   <tr key={s.id}>
-                    <td style={{ fontWeight: 700 }}>{s.name}</td>
+                    <td style={{ fontWeight: 700 }}>
+                      {s.name}
+                      {s.coordsVerified === false && (
+                        <span className="muted" title="Coordinates not verified yet" style={{ marginLeft: 6, fontWeight: 400 }}>
+                          ≈
+                        </span>
+                      )}
+                    </td>
                     <td>{s.program}</td>
                     <td className="muted">{s.status}</td>
                     <td className="mono">{formatLat(s.lat)}</td>

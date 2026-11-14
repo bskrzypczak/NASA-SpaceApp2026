@@ -8,7 +8,7 @@ import { formatLat, formatLon, toQuery } from '../lib/coords';
 /** Screen 4 — confirmation popup over the Site screen. Route: /site/confirm */
 export function SiteConfirmModal() {
   const navigate = useNavigate();
-  const { lat, lon, name } = useSelection();
+  const { lat, lon, name, landingTime, missionDays } = useSelection();
   const close = useCallback(() => navigate(`/site${toQuery({ lat, lon })}`), [navigate, lat, lon]);
 
   return (
@@ -49,12 +49,12 @@ export function SiteConfirmModal() {
             <dd>{formatLon(lon, 4)}</dd>
           </div>
           <div>
-            <dt>Landing date</dt>
-            <dd className="muted">[from MissionForm]</dd>
+            <dt>Landing (UTC)</dt>
+            <dd>{landingTime.replace('T', ' ')}</dd>
           </div>
           <div>
             <dt>Mission length</dt>
-            <dd className="muted">[from MissionForm]</dd>
+            <dd>{missionDays} days</dd>
           </div>
         </dl>
         <Placeholder label="Hardware preset" note="Battery, solar array, loads." tag="HardwarePreset · next" minHeight={100} />

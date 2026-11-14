@@ -51,6 +51,27 @@ Bez pliku pokazują się proceduralne gwiazdy (drei `<Stars>`).
 Konwersja współrzędnych: `src/lib/geo.ts` (`latLonToVector` / `vectorToLatLon`), zgodna z UV `SphereGeometry`
 i mapą equirectangular (lewa krawędź = 180° W, góra = 90° N).
 
+## Ekran 3 · Site
+
+- **Mapa — 2 widoki:**
+  - *Imagery · LROC* — zbliżenie z góry na tę samą teksturę co globus (północ u góry). Przeciąganie = przesuwanie, kółko = zoom, **klik = przesunięcie pinezki** (aktualizuje LAT/LON, panel i URL). Przycisk ⌖ wraca do pinezki. Przy biegunie tekstura jest mało szczegółowa — od tego jest drugi widok.
+  - *Terrain · LOLA* — cieniowana rzeźba z `GET /terrain/heightmap` (5/10/20/40 km, zoom zmienia zakres), pinezka w środku, wysokość pod kursorem.
+- **Warstwy mapy** (oświetlenie, widoczność Ziemi, PSR, nachylenie) — pobierane z `GET /layers`; dopóki backend nie poda `tileUrl`, są wyłączone z etykietą „coming soon”.
+- **Panel:** edycja LAT/LON (Apply / Enter), wysokość / nachylenie / PSR z `GET /terrain/point` — `null` z backendu = „—”, formularz misji (data UTC + 3/7/14/30 dni, zapisywany w store i pokazywany w popupie), „Start simulation” → popup.
+
+## Backend i tryby API
+
+Skopiuj `.env.example` do `.env.local`:
+
+| Tryb | Ustawienia | Zachowanie |
+|---|---|---|
+| live | `VITE_API_URL=http://localhost:8000/api/v1` | prawdziwy backend |
+| mock | brak URL, `VITE_USE_MOCKS=true` | generowany teren do pracy nad UI — zawsze z plakietką **MOCK DATA** |
+| offline | brak URL, `VITE_USE_MOCKS` ≠ true | wartości „—”, komunikat „backend not connected” |
+
+Klient: `src/api/client.ts`, typy odpowiedzi zgodne z `backend/README.md`: `src/api/types.ts`.
+Pola, których backend jeszcze nie liczy (`slopeDeg`, `inPermanentShadow`), są typowane jako `| null` i obsłużone w UI.
+
 ## Struktura
 
 ```
@@ -73,7 +94,7 @@ src/
 ## Następne kroki
 
 1. `FeaturedSites` na ekranie 1; w `Moon3D` relief z mapy wysokości (`ldem`) jako bumpMap.
-2. `SiteMap` z warstwami i `MissionForm` (data + długość misji) na ekranie 3.
+2. Rysowanie kafelków warstw na mapie Site, gdy backend zacznie zwracać `tileUrl`; ekran Nearby.
 3. `RouteMap` w popupie i ekran Simulation (`/simulation`).
 4. Dane: `public/data/<site>.json` z Horizons + maska horyzontu z LOLA.
 

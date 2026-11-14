@@ -1,9 +1,10 @@
-import { Component, Suspense, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { Suspense, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { Canvas, useFrame, useLoader, useThree, type Camera } from '@react-three/fiber';
 import { OrbitControls, Stars } from '@react-three/drei';
 import { EquirectangularReflectionMapping, SRGBColorSpace, TextureLoader, Vector3 } from 'three';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import { MoonGlobe, TexturedMoonGlobe } from './MoonGlobe';
+import { TextureBoundary } from './TextureBoundary';
 import { useSelection } from '../../store/selection';
 import { latLonToVector } from '../../lib/geo';
 import { formatLat, formatLon, type LatLon } from '../../lib/coords';
@@ -151,18 +152,4 @@ function CameraRig({ skipFlyRef }: { skipFlyRef: React.MutableRefObject<boolean>
       onStart={() => (flyDir.current = null)}
     />
   );
-}
-
-/** Shows the grey Moon if the texture file is missing instead of crashing the page. */
-class TextureBoundary extends Component<{ fallback: ReactNode; onError: () => void; children: ReactNode }, { failed: boolean }> {
-  state = { failed: false };
-  static getDerivedStateFromError() {
-    return { failed: true };
-  }
-  componentDidCatch() {
-    this.props.onError();
-  }
-  render() {
-    return this.state.failed ? this.props.fallback : this.props.children;
-  }
 }

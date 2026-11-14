@@ -5,10 +5,12 @@ interface CoordinateBarProps {
   value: LatLon;
   /** Called with valid coordinates when the user presses Next. */
   onNext: (point: LatLon) => void;
+  /** Elevation of the selected point from GET /terrain/point; undefined = loading, null = unknown. */
+  elevationM?: number | null;
 }
 
 /** LAT / LON / ELEV bar under the Moon model, with the Next button. */
-export function CoordinateBar({ value, onNext }: CoordinateBarProps) {
+export function CoordinateBar({ value, onNext, elevationM }: CoordinateBarProps) {
   const [latText, setLatText] = useState(value.lat.toFixed(4));
   const [lonText, setLonText] = useState(value.lon.toFixed(4));
 
@@ -51,8 +53,8 @@ export function CoordinateBar({ value, onNext }: CoordinateBarProps) {
       </label>
       <div className="coord-bar__readout">
         <span className="eyebrow">Elev</span>
-        <span className="value muted" title="Comes from the LOLA DEM once terrain data is wired in">
-          — m
+        <span className={`value${elevationM == null ? ' muted' : ''}`} title="LOLA DEM via the backend (GET /terrain/point)">
+          {elevationM === undefined ? '…' : elevationM === null ? '— m' : `${Math.round(elevationM).toLocaleString('en-US')} m`}
         </span>
       </div>
       <button type="submit" className="btn btn--primary btn--lg" disabled={!valid}>
