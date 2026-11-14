@@ -9,6 +9,9 @@ Aktualizacja: 2026-11-14
   `/api/v1/horizon`, `/api/v1/ephemeris`, `/api/v1/simulations`,
   `/api/v1/simulations/{id}`, `/api/v1/calendar`,
   `/api/v1/scenarios/compare` i `/api/v1/meta/sources`.
+- Rozdzielono routery symulacji i kalendarza od konfiguracji aplikacji oraz
+  wydzielono obliczenia heightmapy i horyzontu do osobnych modułów źródeł.
+  Żaden plik Python w `backend/app` nie przekracza 700 linii.
 - Dodano katalog 19 miejsc zgodny z frontendem. Ich współrzędne są nadal
   przybliżone (`coordsVerified: false`).
 - Podłączono rzeczywiste źródła: DEM LOLA przez NASA Moon Trek oraz efemerydy

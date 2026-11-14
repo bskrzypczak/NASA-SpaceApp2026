@@ -270,9 +270,9 @@ def test_simulation_post_and_get_return_idempotent_contract(monkeypatch):
     async def fake_terrain(lat, lon):
         return {"elevationM": 1956.0}
 
-    monkeypatch.setattr("app.main.fetch_ephemeris", fake_ephemeris)
-    monkeypatch.setattr("app.main.fetch_lunar_elevation", fake_terrain)
-    monkeypatch.setattr("app.main.SIMULATIONS", {})
+    monkeypatch.setattr("app.simulation_routes.fetch_ephemeris", fake_ephemeris)
+    monkeypatch.setattr("app.simulation_routes.fetch_lunar_elevation", fake_terrain)
+    monkeypatch.setattr("app.simulation_routes.SIMULATIONS", {})
     response = client.post(
         f"{API}/simulations",
         json={
@@ -347,10 +347,10 @@ def test_simulation_real_terrain_uses_separate_observer_heights(monkeypatch):
             "elevationDeg": [height_m, height_m, height_m, height_m],
         }
 
-    monkeypatch.setattr("app.main.fetch_ephemeris", fake_ephemeris)
-    monkeypatch.setattr("app.main.fetch_lunar_elevation", fake_terrain)
-    monkeypatch.setattr("app.main.fetch_horizon", fake_horizon)
-    monkeypatch.setattr("app.main.SIMULATIONS", {})
+    monkeypatch.setattr("app.simulation_routes.fetch_ephemeris", fake_ephemeris)
+    monkeypatch.setattr("app.simulation_routes.fetch_lunar_elevation", fake_terrain)
+    monkeypatch.setattr("app.simulation_routes.fetch_horizon", fake_horizon)
+    monkeypatch.setattr("app.simulation_routes.SIMULATIONS", {})
 
     response = client.post(
         f"{API}/simulations",
@@ -377,7 +377,7 @@ def test_simulation_real_terrain_uses_separate_observer_heights(monkeypatch):
 
 
 def test_simulation_validates_site_and_sampling_window(monkeypatch):
-    monkeypatch.setattr("app.main.SIMULATIONS", {})
+    monkeypatch.setattr("app.simulation_routes.SIMULATIONS", {})
     missing_site = client.post(
         f"{API}/simulations",
         json={
@@ -433,9 +433,9 @@ def test_simulation_accepts_default_30_day_4320_sample_window(monkeypatch):
     async def fake_terrain(_lat, _lon):
         return {"elevationM": 100.0}
 
-    monkeypatch.setattr("app.main.fetch_ephemeris", fake_ephemeris)
-    monkeypatch.setattr("app.main.fetch_lunar_elevation", fake_terrain)
-    monkeypatch.setattr("app.main.SIMULATIONS", {})
+    monkeypatch.setattr("app.simulation_routes.fetch_ephemeris", fake_ephemeris)
+    monkeypatch.setattr("app.simulation_routes.fetch_lunar_elevation", fake_terrain)
+    monkeypatch.setattr("app.simulation_routes.SIMULATIONS", {})
     response = client.post(
         f"{API}/simulations",
         json={

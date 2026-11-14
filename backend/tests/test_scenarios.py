@@ -39,7 +39,7 @@ def test_scenario_compare_returns_summaries_and_prefers_baseline_within_three_po
             "windows": {"sun": [], "earth": [], "both": []},
         }
 
-    monkeypatch.setattr("app.main.create_simulation", fake_create_simulation)
+    monkeypatch.setattr("app.simulation_routes.create_simulation", fake_create_simulation)
     response = client.post(
         f"{API}/scenarios/compare",
         json={
@@ -84,7 +84,7 @@ def test_scenario_compare_returns_no_recommendation_when_requirements_fail(
             "windows": {"sun": [], "earth": [], "both": []},
         }
 
-    monkeypatch.setattr("app.main.create_simulation", fake_create_simulation)
+    monkeypatch.setattr("app.simulation_routes.create_simulation", fake_create_simulation)
     response = client.post(
         f"{API}/scenarios/compare",
         json={

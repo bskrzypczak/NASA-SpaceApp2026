@@ -8,16 +8,18 @@ import numpy as np
 import pytest
 from fastapi import HTTPException
 
+from app.heightmap_source import (
+    HeightmapOutOfCoverageError,
+    _heightmap_export_params,
+    _heightmap_from_dem,
+)
+from app.horizon_source import _horizon_profile_from_dem
 from app.sources import (
     DEM_SERVICES,
-    HeightmapOutOfCoverageError,
     PermanentShadowDataError,
     _fetch_dem_sample,
     _fetch_permanent_shadow,
     _get_json,
-    _heightmap_export_params,
-    _heightmap_from_dem,
-    _horizon_profile_from_dem,
     _north_polar_stereographic_xy,
     _parse_horizons_response,
     _south_polar_stereographic_xy,

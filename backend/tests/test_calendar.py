@@ -3,7 +3,8 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi.testclient import TestClient
 
-from app.main import _fetch_calendar_ephemeris, app
+from app.calendar_routes import _fetch_calendar_ephemeris
+from app.main import app
 
 client = TestClient(app)
 API = "/api/v1"
@@ -33,8 +34,8 @@ def test_calendar_scores_each_landing_day_and_aggregates_months(monkeypatch):
     async def fail_horizon(*_args):
         raise AssertionError("flat model uses no DEM")
 
-    monkeypatch.setattr("app.main.fetch_ephemeris", fake_ephemeris)
-    monkeypatch.setattr("app.main.fetch_horizon", fail_horizon)
+    monkeypatch.setattr("app.calendar_routes.fetch_ephemeris", fake_ephemeris)
+    monkeypatch.setattr("app.calendar_routes.fetch_horizon", fail_horizon)
     response = client.post(
         f"{API}/calendar",
         json={
@@ -82,8 +83,8 @@ def test_calendar_fetches_separate_real_masks_for_panel_and_mast(monkeypatch):
             "elevationDeg": [height_m] * 4,
         }
 
-    monkeypatch.setattr("app.main.fetch_ephemeris", fake_ephemeris)
-    monkeypatch.setattr("app.main.fetch_horizon", fake_horizon)
+    monkeypatch.setattr("app.calendar_routes.fetch_ephemeris", fake_ephemeris)
+    monkeypatch.setattr("app.calendar_routes.fetch_horizon", fake_horizon)
     response = client.post(
         f"{API}/calendar",
         json={
@@ -143,7 +144,7 @@ def test_calendar_supports_full_year_across_horizons_chunks(monkeypatch):
             },
         }
 
-    monkeypatch.setattr("app.main.fetch_ephemeris", fake_ephemeris)
+    monkeypatch.setattr("app.calendar_routes.fetch_ephemeris", fake_ephemeris)
     response = client.post(
         f"{API}/calendar",
         json={
@@ -177,7 +178,7 @@ def test_calendar_ephemeris_chunks_preserve_hourly_sample_alignment(monkeypatch)
             "earth": {"azDeg": values, "elDeg": values},
         }
 
-    monkeypatch.setattr("app.main.fetch_ephemeris", fake_ephemeris)
+    monkeypatch.setattr("app.calendar_routes.fetch_ephemeris", fake_ephemeris)
     result = asyncio.run(
         _fetch_calendar_ephemeris(
             -89.45,
