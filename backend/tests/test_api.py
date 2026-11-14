@@ -29,7 +29,7 @@ def test_site_details_include_terrain_data(monkeypatch):
             "slopeDeg": None,
             "demCoverage": True,
             "demResolutionM": 100.0,
-            "inPermanentShadow": None,
+            "inPermanentShadow": True,
             "demVersion": "LRO_LOLA_DEM_SPole45_100mp_v04",
             "source": "NASA Moon Trek LRO LOLA ImageServer",
         }
@@ -39,6 +39,8 @@ def test_site_details_include_terrain_data(monkeypatch):
     assert response.status_code == 200
     assert response.json()["demCoverage"] is True
     assert response.json()["elevationM"] == 1318.0
+    assert response.json()["inPermanentShadow"] is True
+    assert "NASA GSFC PGDA LPSR PSR map" in response.json()["sources"]
 
 
 def test_catalog_filters_by_group_region_and_query():
@@ -57,7 +59,7 @@ def test_terrain_point_normalizes_longitude_and_returns_nearest_site(monkeypatch
             "slopeDeg": None,
             "demCoverage": True,
             "demResolutionM": 100.0,
-            "inPermanentShadow": None,
+            "inPermanentShadow": False,
             "demVersion": "LRO_LOLA_DEM_SPole45_100mp_v04",
             "source": "NASA Moon Trek LRO LOLA ImageServer",
         }
@@ -76,6 +78,7 @@ def test_terrain_point_normalizes_longitude_and_returns_nearest_site(monkeypatch
     assert response.json()["elevationM"] == 1318.0
     assert response.json()["demCoverage"] is True
     assert response.json()["demResolutionM"] == 100.0
+    assert response.json()["inPermanentShadow"] is False
 
 
 def test_ephemeris_endpoint_validates_inputs_and_returns_real_source_shape(monkeypatch):

@@ -18,6 +18,13 @@ MOON_RADIUS_KM = 1737.4
 MAX_CACHE_ENTRIES = 512
 HORIZONS_CACHE_TTL = 24 * 60 * 60
 DEM_CACHE_TTL = 24 * 60 * 60
+PSR_RASTER_URL = (
+    "/vsicurl/https://pgda.gsfc.nasa.gov/data/LOLA_20mpp/"
+    "LPSR_80S_20MPP_ADJ.TIF"
+)
+PSR_MIN_LATITUDE = -90.0
+PSR_MAX_LATITUDE = -80.0
+MOON_RADIUS_M = 1_737_400.0
 
 DEM_SERVICES = {
     "south-pole": {
@@ -162,6 +169,58 @@ async def _fetch_dem_sample(
     return value if math.isfinite(value) else None
 
 
+class PermanentShadowDataError(RuntimeError):
+    pass
+
+
+def _south_polar_stereographic_xy(lat: float, lon: float) -> tuple[float, float]:
+    rho = 2 * MOON_RADIUS_M * math.tan(math.pi / 4 + math.radians(lat) / 2)
+    longitude = math.radians(lon)
+    return rho * math.sin(longitude), rho * math.cos(longitude)
+
+
+def _read_psr_raster_value(lat: float, lon: float) -> float | None:
+    try:
+        import rasterio
+    except ImportError as exc:
+        raise PermanentShadowDataError(
+            "Rasterio is required to read the PGDA PSR map."
+        ) from exc
+
+    x, y = _south_polar_stereographic_xy(lat, lon)
+    try:
+        with rasterio.Env(
+            GDAL_HTTP_USERAGENT="HORIZON-backend/0.1",
+            GDAL_HTTP_VERSION="1.1",
+            CPL_VSIL_CURL_USE_HEAD="NO",
+            GDAL_DISABLE_READDIR_ON_OPEN="EMPTY_DIR",
+            CPL_VSIL_CURL_ALLOWED_EXTENSIONS=".TIF",
+        ):
+            with rasterio.open(PSR_RASTER_URL) as dataset:
+                row, col = dataset.index(x, y)
+                if not (0 <= row < dataset.height and 0 <= col < dataset.width):
+                    return None
+                value = float(next(dataset.sample([(x, y)]))[0])
+    except (OSError, rasterio.errors.RasterioError) as exc:
+        raise PermanentShadowDataError(
+            "The PGDA PSR raster could not be read."
+        ) from exc
+
+    return value if math.isfinite(value) else None
+
+
+async def _fetch_permanent_shadow(lat: float, lon: float) -> bool | None:
+    if not PSR_MIN_LATITUDE <= lat <= PSR_MAX_LATITUDE:
+        return None
+    try:
+        raster_value = await asyncio.to_thread(_read_psr_raster_value, lat, lon)
+    except PermanentShadowDataError as exc:
+        raise _upstream_error("The PGDA PSR map could not be reached.") from exc
+    if raster_value is None or not math.isfinite(raster_value):
+        return None
+    return raster_value > 0.5
+
+
 async def fetch_lunar_elevation(lat: float, lon: float) -> dict[str, Any]:
     service = _dem_service_for_latitude(lat)
     key = f"dem:{service['version']}:{lat:.5f}:{lon:.5f}"
@@ -185,11 +244,14 @@ async def fetch_lunar_elevation(lat: float, lon: float) -> dict[str, Any]:
         "west": _destination_point(lat, lon, 270, east_west_step_m),
     }
     async with httpx.AsyncClient(timeout=12.0) as client:
-        samples = await asyncio.gather(
-            *(
-                _fetch_dem_sample(client, service, point_lat, point_lon)
-                for point_lat, point_lon in sample_points.values()
-            )
+        samples, in_permanent_shadow = await asyncio.gather(
+            asyncio.gather(
+                *(
+                    _fetch_dem_sample(client, service, point_lat, point_lon)
+                    for point_lat, point_lon in sample_points.values()
+                )
+            ),
+            _fetch_permanent_shadow(lat, lon),
         )
     elevations = dict(zip(sample_points, samples))
     elevation_m = elevations["center"]
@@ -211,7 +273,7 @@ async def fetch_lunar_elevation(lat: float, lon: float) -> dict[str, Any]:
         "slopeDeg": round(slope_deg, 3) if slope_deg is not None else None,
         "demCoverage": elevation_m is not None,
         "demResolutionM": round(resolution_m, 1),
-        "inPermanentShadow": None,
+        "inPermanentShadow": in_permanent_shadow,
         "demVersion": service["version"],
         "source": "NASA Moon Trek LRO LOLA ImageServer",
     }
