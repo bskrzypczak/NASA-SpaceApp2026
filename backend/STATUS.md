@@ -80,9 +80,10 @@ Aktualizacja: 2026-11-14
 
 ## Do zrobienia
 
-- Jeśli frontend potrzebuje nakładki mapowej PSR, uzgodnić i dodać endpoint
-  warstw/kafelków. Obecnie endpointów `/layers` ani `/layers/{layer}/tiles/...`
-  nie ma.
+- Katalog `GET /layers` zwraca warstwy znane frontendowi. Kafelki mapowe
+  (`/layers/{layer}/tiles/{z}/{x}/{y}.png`) nie są jeszcze serwowane; jeśli
+  frontend potrzebuje ich jako rzeczywistych nakładek, uzgodnić źródła i
+  dodać endpoint lub statyczne URL-e CDN.
 - Zweryfikować wysokości i nachylenie na kolejnych niezależnych punktach
   kontrolnych; obecnie live sprawdzono jeden punkt na biegunie południowym.
 - Zweryfikować współrzędne katalogu miejsc.

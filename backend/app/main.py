@@ -20,6 +20,32 @@ from app.sources import fetch_ephemeris, fetch_lunar_elevation
 LUNAR_RADIUS_KM = 1737.4
 SiteGroup = Literal["Artemis III", "CLPS", "Commercial", "Other nations", "Apollo"]
 Region = Literal["South pole", "Near side", "Far side"]
+LAYER_CATALOG = [
+    {
+        "id": "illumination",
+        "name": "Sunlight (avg.)",
+        "source": "PGDA",
+        "tileUrl": None,
+    },
+    {
+        "id": "earth-visibility",
+        "name": "Earth visibility",
+        "source": "PGDA",
+        "tileUrl": None,
+    },
+    {
+        "id": "psr",
+        "name": "Permanent shadow",
+        "source": "PGDA",
+        "tileUrl": None,
+    },
+    {
+        "id": "slope",
+        "name": "Slope > 10°",
+        "source": "LOLA",
+        "tileUrl": None,
+    },
+]
 
 app = FastAPI(
     title="HORIZON API",
@@ -358,6 +384,11 @@ async def get_ephemeris(
 
 app.include_router(simulation_router)
 app.include_router(calendar_router)
+
+
+@app.get(f"{API_PREFIX}/layers")
+async def get_layers() -> dict:
+    return {"layers": LAYER_CATALOG}
 
 
 @app.get(f"{API_PREFIX}/meta/sources")

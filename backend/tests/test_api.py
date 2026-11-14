@@ -10,6 +10,40 @@ def test_health_endpoint():
     assert client.get(f"{API}/health").json() == {"status": "ok"}
 
 
+def test_layers_catalog_matches_frontend_contract():
+    response = client.get(f"{API}/layers")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "layers": [
+            {
+                "id": "illumination",
+                "name": "Sunlight (avg.)",
+                "source": "PGDA",
+                "tileUrl": None,
+            },
+            {
+                "id": "earth-visibility",
+                "name": "Earth visibility",
+                "source": "PGDA",
+                "tileUrl": None,
+            },
+            {
+                "id": "psr",
+                "name": "Permanent shadow",
+                "source": "PGDA",
+                "tileUrl": None,
+            },
+            {
+                "id": "slope",
+                "name": "Slope > 10°",
+                "source": "LOLA",
+                "tileUrl": None,
+            },
+        ]
+    }
+
+
 def test_catalog_returns_frontend_sites_and_featured_subset():
     response = client.get(f"{API}/sites")
     assert response.status_code == 200

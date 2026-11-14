@@ -79,7 +79,8 @@ Każdy błąd ma ten sam kształt:
 | Ważne | POST | `/nearby` | Better places nearby |
 | Ważne | GET | `/meta/sources` | Pro → Data & validation |
 | Ważne | GET | `/validation` | Pro → Data & validation |
-| Dodatkowe | GET | `/layers/{layer}/tiles/{z}/{x}/{y}.png` | Site (warstwy mapy) |
+| **MVP** | GET | `/layers` | Site (katalog warstw mapy) |
+| Dodatkowe (planowane) | GET | `/layers/{layer}/tiles/{z}/{x}/{y}.png` | Site (kafelki warstw mapy) |
 | Dodatkowe | GET | `/route` | Popup (trasa Ziemia → Księżyc) |
 | Dodatkowe | GET | `/simulations/{id}/brief.pdf` | Mission brief |
 | Dodatkowe | GET | `/jobs/{id}` | długie obliczenia (async) |
@@ -438,21 +439,26 @@ Odpowiedź:
 - `excluded` — komórki z nachyleniem > `maxSlopeDeg` lub w PSR (no-go).
 - 2 500 komórek × symulacja → **zawsze async** (§5). Optymalizacja: maski horyzontu sąsiednich komórek są prawie takie same → licz rzadziej i interpoluj.
 
-### 4.11 `GET /layers/{layer}/tiles/{z}/{x}/{y}.png` — warstwy mapy
+### 4.11 `GET /layers` — katalog warstw mapy
 
 `layer`: `illumination` \| `earth-visibility` \| `psr` \| `slope`.
 
-Kafelki w projekcji biegunowej (jak Moon Trek WMTS). Najprościej: **wygenerować raz** z map PGDA / LOLA i serwować statycznie (CDN), backend tylko podaje URL-e:
+Katalog zwraca cztery warstwy obsługiwane przez frontend. `tileUrl` pozostaje `null`, ponieważ backend nie serwuje jeszcze kafelków; nie zwracamy w nim niedziałających URL-i.
 
 `GET /layers` →
 
 ```json
 {
   "layers": [
-    { "id": "illumination", "name": "Sunlight (avg.)", "source": "NASA GSFC PGDA", "tileUrl": "/tiles/illumination/{z}/{x}/{y}.png", "legend": [{ "value": 80, "label": "80 %+" }] }
+    { "id": "illumination", "name": "Sunlight (avg.)", "source": "PGDA", "tileUrl": null },
+    { "id": "earth-visibility", "name": "Earth visibility", "source": "PGDA", "tileUrl": null },
+    { "id": "psr", "name": "Permanent shadow", "source": "PGDA", "tileUrl": null },
+    { "id": "slope", "name": "Slope > 10°", "source": "LOLA", "tileUrl": null }
   ]
 }
 ```
+
+Planowane kafelki w projekcji biegunowej (jak Moon Trek WMTS) można wygenerować z map PGDA / LOLA i serwować statycznie (CDN). Endpoint `/layers/{layer}/tiles/{z}/{x}/{y}.png` nie jest obecnie zaimplementowany.
 
 ### 4.12 `GET /route` — trasa Ziemia → Księżyc (popup)
 
