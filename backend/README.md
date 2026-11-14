@@ -606,6 +606,49 @@ Domyślne wagi: `wP = 0.5`, `wC = 0.3`, `wN = 0.2`. **Front i backend muszą lic
 - Hosting: Render / Fly.io; statyczne kafelki i JSON-y z wyprzedzeniem na CDN.
 - Dokumentacja interaktywna za darmo z FastAPI: `/docs` (Swagger) — frontend widzi kontrakt od pierwszego dnia.
 
+### Uruchomienie aktualnego MVP
+
+Backend jest w katalogu `backend/` i wymaga Python 3.10+.
+
+```powershell
+cd backend
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+uvicorn app.main:app --reload
+```
+
+API działa pod `http://localhost:8000/api/v1`, a dokumentacja OpenAPI pod
+`http://localhost:8000/docs`. Dozwolony origin frontendu można zmienić przez
+`FRONTEND_ORIGINS` (lista originów rozdzielona przecinkami).
+Testy uruchom poleceniem `python -m pytest` w katalogu `backend/`.
+
+Obecna implementacja udostępnia `GET /health`, `GET /sites`,
+`GET /sites/{id}`, `GET /terrain/point`, `GET /ephemeris` i
+`GET /meta/sources`. Katalog ma te same 19 wpisów co frontend; jego
+współrzędne pozostają przybliżone (`coordsVerified: false`).
+
+`/terrain/point` pobiera wartości z NASA Moon Trek ImageServer: DEM biegunowe
+LOLA ma rozdzielczość 100 m/px, a globalny DEM 256 px/stopień. Nie jest to
+deklarowany w pierwotnym projekcie zestaw PGDA 5 m/px; odpowiedź zwraca
+rozdzielczość i identyfikator użytej warstwy. Nachylenie jest szacowane z
+centralnych różnic wysokości w czterech kierunkach. `inPermanentShadow`
+pozostaje `null`; mapa PSR z PGDA nie jest jeszcze podłączona do API.
+
+`/ephemeris` odpytuje JPL Horizons dla obserwatora na powierzchni Księżyca
+(body 301), z modelem airless i DE441. Zakres musi mieć strefę czasową, być
+podzielny przez `stepMin` i nie przekraczać 4320 próbek. Odpowiedzi są cache'owane
+w pamięci procesu przez 24 godziny. Błędy i timeouty źródeł są zwracane jawnie.
+Symulacje, maska horyzontu z wysokorozdzielczego DEM i pozostałe endpointy
+specyfikacji wymagają dalszej implementacji oraz danych wejściowych.
+
+Sprawdzenie live wykonane 2026-11-14 dla `lat=-89.45`, `lon=-137.3`:
+`/terrain/point` zwrócił `1318 m` z `LRO_LOLA_DEM_SPole45_100mp_v04`.
+Dla przedziału `2027-03-14T06:00:00Z`–`2027-03-14T06:20:00Z`, krok 10 min,
+Horizons zwrócił dla pierwszej próbki Słońce `az=241.197254°`,
+`el=-1.097653°`, a Ziemię `az=132.864769°`, `el=5.865464°`.
+Wartości są wynikiem zewnętrznych usług NASA/JPL, a nie stałymi testowymi.
+
 ### Kolejność prac
 
 1. `GET /sites`, `GET /terrain/point` (na stałych danych) — odblokowuje ekrany 1–3.
