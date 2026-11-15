@@ -33,7 +33,8 @@ function requestFromSelection(sel: SelectionState, horizonModel?: HorizonModel):
   };
 }
 
-function twinRequest(r: SimulationResult, horizonModel: HorizonModel): SimulationRequest {
+/** Same mission as `r`, asking for the time series (scenario / calendar results come without it). */
+function requestWithSeries(r: SimulationResult): SimulationRequest {
   const i = r.input;
   return {
     site: i.site ?? { lat: r.site.lat, lon: r.site.lon },
@@ -41,7 +42,7 @@ function twinRequest(r: SimulationResult, horizonModel: HorizonModel): Simulatio
     missionDays: i.missionDays ?? 14,
     windowDays: i.windowDays ?? WINDOW_DAYS,
     stepMin: i.stepMin ?? STEP_MIN,
-    horizonModel,
+    horizonModel: i.horizonModel ?? 'real',
     hardware: i.hardware,
     weights: i.weights,
     includeTimeseries: true,
@@ -116,9 +117,6 @@ export function SimulationPage() {
   const navigate = useNavigate();
   const cached = useSimulations((s) => s.results[id]);
   const put = useSimulations((s) => s.put);
-  const linkFlat = useSimulations((s) => s.linkFlat);
-  const flatId = useSimulations((s) => s.flatTwin[id]);
-  const flatResult = useSimulations((s) => (flatId ? s.results[flatId] : undefined));
 
   const fetched = useApi((signal) => (cached ? Promise.resolve(cached) : getSimulation(id, signal)), [id]);
   const base = cached ?? fetched.data ?? null;
@@ -130,10 +128,29 @@ export function SimulationPage() {
     }
   }, [fetched.data, cached, put]);
 
+  // Results opened from Scenarios have no time series: run the same mission again with it, then swap in.
+  const needsSeries = !!base && !base.timeseries;
+  const [seriesError, setSeriesError] = useState<Error | null>(null);
+  useEffect(() => {
+    if (!needsSeries || !base) return;
+    let alive = true;
+    setSeriesError(null);
+    runOnce(requestWithSeries(base))
+      .then((res) => {
+        if (!alive) return;
+        put(res);
+        setLastSimulation(res.id);
+        if (res.id !== base.id) navigate(`/simulation/${encodeURIComponent(res.id)}${window.location.search}`, { replace: true });
+      })
+      .catch((e: Error) => alive && setSeriesError(e));
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [needsSeries, base?.id]);
+
   const [view, setView] = useState<'3d' | 'sky'>('3d');
   const [camera, setCamera] = useState<CameraMode>('orbit');
-  const [showFlat, setShowFlat] = useState(false);
-  const [flatLoading, setFlatLoading] = useState(false);
   const [t, setT] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(6);
@@ -151,7 +168,8 @@ export function SimulationPage() {
     );
 
   const baseIsReal = base?.input.horizonModel !== 'flat';
-  const shown = showFlat && flatResult ? flatResult : base;
+  // The flat-horizon comparison stays in the score card (summary.flatHorizonSuccessPct); no separate view.
+  const shown = base;
   const realTerrain = !!shown && shown.input.horizonModel !== 'flat';
   const windowDays = shown?.input.windowDays ?? WINDOW_DAYS;
   const missionDays = shown?.input.missionDays ?? 14;
@@ -177,20 +195,7 @@ export function SimulationPage() {
     return () => clearInterval(timer);
   }, [playing, speed, windowDays]);
 
-  async function toggleHorizon(flat: boolean) {
-    setShowFlat(flat);
-    if (!flat || !base || flatResult || !baseIsReal) return;
-    setFlatLoading(true);
-    try {
-      const res = await runOnce(twinRequest(base, 'flat'));
-      put(res);
-      linkFlat(base.id, res.id);
-    } catch {
-      setShowFlat(false);
-    } finally {
-      setFlatLoading(false);
-    }
-  }
+
 
   if (!base) {
     if (fetched.loading) return <SimLoading name="simulation" realTerrain={false} short />;
@@ -212,7 +217,14 @@ export function SimulationPage() {
 
   const ts = shown?.timeseries;
   if (!shown || !ts) {
-    return <SimMessage title="No time series in this result" detail="Re-run the simulation with includeTimeseries: true." />;
+    if (!seriesError) return <SimLoading name={shown?.site.name ?? 'simulation'} realTerrain={shown?.input.horizonModel !== 'flat'} />;
+    return (
+      <SimMessage title="Could not load the time series" detail={seriesError.message} code={seriesError instanceof ApiError ? seriesError.code : undefined}>
+        <button type="button" className="btn btn--primary" onClick={() => navigate(0)}>
+          Try again
+        </button>
+      </SimMessage>
+    );
   }
 
   const sky = skyAt(ts, Math.min(t, windowDays - (ts.stepMin / 1440) * 1.01));
@@ -231,31 +243,6 @@ export function SimulationPage() {
           <span aria-hidden="true">/</span>
           <span>Simulation</span>
         </nav>
-        <div className="segmented" role="group" aria-label="View">
-          <button type="button" aria-pressed={view === '3d'} onClick={() => setView('3d')}>
-            3D scene
-          </button>
-          <button type="button" aria-pressed={view === 'sky'} onClick={() => setView('sky')}>
-            Sky 360°
-          </button>
-        </div>
-        <div className="segmented" role="group" aria-label="Horizon model">
-          <button type="button" aria-pressed={!showFlat && baseIsReal} disabled={!baseIsReal} onClick={() => toggleHorizon(false)} title={baseIsReal ? '' : 'This run used a flat horizon — run again for real terrain'}>
-            Real terrain (LOLA)
-          </button>
-          <button type="button" aria-pressed={showFlat || !baseIsReal} onClick={() => toggleHorizon(true)}>
-            {flatLoading ? 'Flat horizon…' : 'Flat horizon'}
-          </button>
-        </div>
-        {view === '3d' && (
-          <div className="segmented" role="group" aria-label="Camera">
-            {(['orbit', 'overview', 'lander', 'top'] as CameraMode[]).map((c) => (
-              <button key={c} type="button" aria-pressed={camera === c} onClick={() => setCamera(c)}>
-                {c === 'orbit' ? 'Orbit' : c === 'overview' ? 'Overview' : c === 'lander' ? 'Lander view' : 'Top-down'}
-              </button>
-            ))}
-          </div>
-        )}
         <div className="sim-toolbar__right">
           {(shown.mock || apiMode === 'mock') && <span className="badge badge--warn">MOCK DATA</span>}
           <Link to="/dates" className="btn">
@@ -284,15 +271,30 @@ export function SimulationPage() {
         ) : (
           <SkyView ts={ts} sky={sky} horizon={realTerrain ? horizon.data : null} />
         )}
+        <div className="sim-stage__hud">
+  <div className="segmented" role="group" aria-label="View">
+            <button type="button" aria-pressed={view === '3d'} onClick={() => setView('3d')}>
+              3D scene
+            </button>
+            <button type="button" aria-pressed={view === 'sky'} onClick={() => setView('sky')}>
+              Sky 360°
+            </button>
+          </div>
+          {view === '3d' && (
+            <div className="segmented" role="group" aria-label="Camera">
+              {(['orbit', 'overview', 'lander', 'top'] as CameraMode[]).map((c) => (
+                <button key={c} type="button" aria-pressed={camera === c} onClick={() => setCamera(c)}>
+                  {c === 'orbit' ? 'Orbit' : c === 'overview' ? 'Overview' : c === 'lander' ? 'Lander view' : 'Top-down'}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
         <div className="sim-stage__site">
           <strong>{siteName}</strong>
           <span className="mono" style={{ color: 'var(--accent)' }}>
             {formatLat(shown.site.lat, 3)} · {formatLon(shown.site.lon, 3)}
           </span>
-        </div>
-        <div className="sim-stage__note mono">
-          {view === '3d' ? `Vertical scale ×${VERTICAL_EXAGGERATION} · ${isSystemView(camera) ? 'Earth–Moon system, distances shortened' : 'ground view'} · ` : 'True scale · '}
-          {realTerrain ? (horizon.loading ? 'loading terrain horizon…' : horizon.data ? `horizon ${horizon.data.demVersion}` : `horizon unavailable${horizon.error ? ` (${horizon.error.message})` : ''}`) : 'flat horizon'} · ephemeris JPL Horizons
         </div>
       </div>
 

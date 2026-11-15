@@ -3,7 +3,7 @@
   flex: 1;
   display: flex;
   flex-wrap: wrap;
-  min-height: calc(100vh - 77px);
+  min-height: calc(100vh - var(--topbar-h));
 }
 
 .site-page__map {
@@ -14,28 +14,106 @@
 }
 
 .site-page__panel {
-  flex: 1 1 380px;
-  max-width: 460px;
-  padding: 28px 32px;
+  flex: 1 1 360px;
+  max-width: 420px;
+  padding: 12px 24px 14px;
   display: flex;
   flex-direction: column;
-  gap: 22px;
+  gap: 12px;
   border-left: 1px solid var(--border);
 }
 
 .site-page__title {
-  margin-top: 6px;
+  margin-top: 2px;
   font-weight: 900;
-  font-size: 32px;
+  font-size: 24px;
   line-height: 1.15;
   letter-spacing: 0.03em;
   text-transform: uppercase;
 }
 
+/* Compact readouts: 2 × 2 tiles instead of four full-width rows. */
+.site-page__panel dl.details {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.site-page__panel dl.details > div {
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 0;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.site-page__panel dl.details dt {
+  font-size: 12px;
+}
+
+.site-page__panel dl.details dd {
+  font-size: 15px;
+}
+
+.site-page__panel .field {
+  gap: 4px;
+}
+
+.site-page__links {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.site-page__link {
+  justify-content: center;
+  gap: 6px;
+  padding: 0 10px;
+  font-size: 12px;
+  text-transform: none;
+  letter-spacing: 0;
+  border-radius: 14px;
+}
+
+/* Desktop: the page is exactly one screen — map fills the height, the panel scrolls only if it must. */
+@media (min-width: 900px) {
+  .site-page {
+    /* flex: none, or the column layout of .app lets the content stretch the page past the screen */
+    flex: none;
+    flex-wrap: nowrap;
+    height: calc(100dvh - var(--topbar-h));
+    min-height: 520px;
+    overflow: hidden;
+  }
+  .site-page__map {
+    min-height: 0;
+  }
+  .site-page__map .site-map {
+    min-height: 0;
+  }
+  .site-page__panel {
+    min-height: 0;
+    overflow-y: auto;
+  }
+}
+
 .coord-editor {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 4px 8px;
+}
+
+.coord-editor__apply {
+  padding: 0 14px;
+  font-size: 12px;
+}
+
+.coord-editor__fmt {
+  grid-column: 1 / -1;
+  color: var(--accent);
+  font-size: 12px;
 }
 
 .coord-editor__foot {

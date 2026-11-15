@@ -25,8 +25,8 @@ const MOON_RADIUS_KM = 1737.4;
 const EARTH_RADIUS_KM = 6371;
 /** Earth–Moon distance in the Overview: shortened (real ≈ 60 Earth radii) so both fit on screen. */
 const D_ORBIT = 15000;
-const D_SUN_SYSTEM = D_ORBIT * 1.45;
-const SUN_RAY_LENGTH = D_ORBIT * 0.9;
+/** Where the Sun marker sits in the Earth–Moon view (direction is real, distance is not). */
+const D_SUN_SYSTEM = D_ORBIT * 1.6;
 /** Globe = cube sphere (no pole pinch, where most landing sites are): segments per cube edge. */
 const CUBE_SEGMENTS = 320;
 const DEFAULT_HORIZON_KM = 150;
@@ -107,6 +107,11 @@ export function SimScene3D({ lat, lon, sky, skyStart, horizon, realTerrain, came
     const q = q2.multiply(q1);
     // The Moon sits opposite the direction in which it sees the Earth.
     const earthDir = azElToVector(sky.earthAz, sky.earthEl, 1).applyQuaternion(q);
+    // Keep the Moon exactly on the drawn orbit: drop the small out-of-plane part (libration / inclination,
+    // a few degrees), which at this scale only made the Moon float off the dashed circle.
+    earthDir.y = 0;
+    if (earthDir.lengthSq() < 1e-9) earthDir.set(-1, 0, 0);
+    earthDir.normalize();
     return { frame: q, groupPos: earthDir.multiplyScalar(-D_ORBIT) };
   }, [system, pivot, spinAxis, sky.sunAz, sky.sunEl, sky.earthAz, sky.earthEl]);
   const toWorld = (v: Vector3) => v.clone().sub(pivot).applyQuaternion(frame).add(groupPos);
@@ -152,7 +157,7 @@ export function SimScene3D({ lat, lon, sky, skyStart, horizon, realTerrain, came
           from the ground the globe is below the horizon anyway. */}
       {terrainMode === 'globe' && <MoonBody quaternion={moonQ} lat={lat} lon={lon} radius={moonR} siteH={siteH} disp={disp} holdUnderPatch={showPatch} kmPerUnit={kmPerUnit} sunDir={sunDirWorld} />}
       <SiteRing />
-      <Compass />
+      {!system && <Compass />}
       <Lander />
 
       {!system && (
@@ -257,9 +262,10 @@ function EarthMoonSystem({
     }
     return pts;
   }, []);
-  // Sunlight: parallel rays, so the line from the site to the Sun just points along +X.
-  const sunEnd = site.clone().add(new Vector3(SUN_RAY_LENGTH, 0, 0));
-  const sunMarker = new Vector3(D_ORBIT * 1.45, 0, 0);
+  // The line of sight ends at the Sun marker, so it visibly "leads to the Sun". (Sunlight itself is lit as
+  // parallel rays from +X; the marker is only a direction sign — the real Sun is ~400× farther.)
+  const sunMarker = new Vector3(D_SUN_SYSTEM, 0, 0);
+  const sunEnd = sunMarker;
   return (
     <>
       <group>

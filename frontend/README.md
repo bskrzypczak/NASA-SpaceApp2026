@@ -99,7 +99,7 @@ Trasy: `/simulation/new` (uruchamia `POST /simulations` z ustawień z ekranów 1
 Kamery: Orbit / Overview (z daleka: makieta + Słońce + Ziemia) / Lander view (rozglądanie się z masztu) / Top-down; oddalanie do 420 jednostek.
 - **Sky 360°:** panorama w prawdziwej skali — oś X azymut, oś Y elewacja, szara maska horyzontu, przerywane tory Słońca i Ziemi.
 - **Karty:** elewacja Słońca i Ziemi + zapas nad terenem, odliczanie do zachodu / Earthset (z `events`), bateria z rezerwą.
-- **Ocena:** procent, werdykt, 3 czynniki z punktami, „Terrain costs N points” (`flatHorizonSuccessPct`). Przełącznik **Real terrain ↔ Flat horizon** dociąga drugą symulację z `horizonModel: "flat"`.
+- **Ocena:** procent, werdykt, 3 czynniki z punktami, „Terrain costs N points” (`flatHorizonSuccessPct` z tej samej odpowiedzi — osobnego widoku „flat horizon” już nie ma, bo w scenie 3D niczego nie zmieniał). Przełączniki **3D scene / Sky 360°** i kamery są w prawym górnym rogu sceny; pasek nad sceną ma tylko nawigację i Basic / Pro.
 - **Oś czasu:** play (1 h/s, 6 h/s, 1 d/s), suwak, pasy Sunlight / Earth link / Both z `windows`, wykres baterii z linią rezerwy i końcem misji.
 - Miejsca na północ od 80° S: backend nie ma tam DEM → wysyłamy `horizonModel: "flat"` automatycznie.
 - **Tryb mock:** `src/lib/simModel.ts` to port 1:1 wzorów z `backend/app/simulation.py` (sprawdzony — te same wyniki na tych samych danych wejściowych).

@@ -128,7 +128,6 @@ export function SiteMap({ lat, lon, onPick, hidePinLabel = false }: LatLon & { o
             MOCK DATA{heightmap.data.fallbackReason ? ` · ${heightmap.data.fallbackReason}` : ''}
           </span>
         )}
-        {view === 'imagery' && <span className="badge">Low-res near the pole · use Terrain for relief</span>}
       </div>
 
       {/* Left: zoom */}

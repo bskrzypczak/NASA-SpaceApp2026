@@ -12,7 +12,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 12px;
-  padding: 12px 40px;
+  padding: 8px 40px;
   border-bottom: 1px solid var(--border);
 }
 
@@ -37,6 +37,27 @@
 
 .sim-stage canvas {
   display: block;
+}
+
+/* View + camera pickers float over the scene (top-right), like the map controls on Site. */
+.sim-stage__hud {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 30;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  max-width: calc(100% - 300px);
+}
+
+.sim-stage__hud .segmented {
+  background: var(--deep-blue);
+}
+
+.sim-stage__hud .segmented button {
+  font-size: 12px;
 }
 
 .sim-stage__site {

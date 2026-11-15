@@ -150,48 +150,58 @@ export function ScenariosPage() {
           ))}
         </ol>
 
-        <div className="scen-add">
-          <span className="eyebrow">Add</span>
-          {[1, 2, 4].map((w) => (
-            <button key={w} type="button" className="btn" disabled={full || !base} onClick={() => addSlip(w)}>
-              Slip +{w} wk
-            </button>
-          ))}
-          <label className="sr-only" htmlFor="catalog-pick">
-            Add another site from the catalog
-          </label>
-          <select id="catalog-pick" className="scen-select" value={catalogPick} disabled={full || !base} onChange={(e) => addCatalog(e.target.value)}>
-            <option value="">Other site, same date…</option>
-            {SITES.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name} ({s.program})
-              </option>
+        <div className="scen-bar">
+          <span className="eyebrow scen-bar__label">Add</span>
+          <div className="scen-bar__controls">
+            {[1, 2, 4].map((w) => (
+              <button key={w} type="button" className="btn scen-chip" disabled={full || !base} onClick={() => addSlip(w)}>
+                Slip +{w} wk
+              </button>
             ))}
-          </select>
-          <button
-            type="button"
-            className="btn"
-            disabled={full}
-            onClick={() => add({ label: sel.name ?? 'Current pick', name: sel.name, lat: sel.lat, lon: sel.lon, landingTime: sel.landingTime, missionDays: sel.missionDays })}
-          >
-            Current selection
-          </button>
-          <button type="button" className="btn" onClick={clear} style={{ marginLeft: 'auto' }}>
+            <label className="sr-only" htmlFor="catalog-pick">
+              Add another site from the catalog
+            </label>
+            <select id="catalog-pick" className="scen-select" value={catalogPick} disabled={full || !base} onChange={(e) => addCatalog(e.target.value)}>
+              <option value="">Other site, same date…</option>
+              {SITES.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name} ({s.program})
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              className="btn scen-chip"
+              disabled={full}
+              onClick={() => add({ label: sel.name ?? 'Current pick', name: sel.name, lat: sel.lat, lon: sel.lon, landingTime: sel.landingTime, missionDays: sel.missionDays })}
+            >
+              Current selection
+            </button>
+          </div>
+          <button type="button" className="btn scen-chip scen-bar__action" onClick={clear}>
             Reset
           </button>
         </div>
 
-        <div className="scen-req">
-          <span className="eyebrow">Requirements</span>
-          <label className="field scen-req__field">
-            <span className="muted">Battery never below (%)</span>
-            <input type="number" min={0} max={100} value={requirements.minSocPct} onChange={(e) => setRequirements({ minSocPct: clampPct(e.target.value) })} />
-          </label>
-          <label className="field scen-req__field">
-            <span className="muted">Earth in view at least (%)</span>
-            <input type="number" min={0} max={100} value={requirements.minEarthVisiblePct} onChange={(e) => setRequirements({ minEarthVisiblePct: clampPct(e.target.value) })} />
-          </label>
-          <button type="button" className="btn btn--primary btn--lg" style={{ marginLeft: 'auto' }} disabled={items.length < 2 || running} onClick={run}>
+        <div className="scen-bar scen-bar--req">
+          <span className="eyebrow scen-bar__label">Requirements</span>
+          <div className="scen-bar__controls">
+            <label className="scen-req__field">
+              <span className="muted">Battery never below</span>
+              <span className="scen-num">
+                <input type="number" min={0} max={100} value={requirements.minSocPct} onChange={(e) => setRequirements({ minSocPct: clampPct(e.target.value) })} />
+                <span aria-hidden="true">%</span>
+              </span>
+            </label>
+            <label className="scen-req__field">
+              <span className="muted">Earth in view at least</span>
+              <span className="scen-num">
+                <input type="number" min={0} max={100} value={requirements.minEarthVisiblePct} onChange={(e) => setRequirements({ minEarthVisiblePct: clampPct(e.target.value) })} />
+                <span aria-hidden="true">%</span>
+              </span>
+            </label>
+          </div>
+          <button type="button" className="btn btn--primary btn--lg scen-bar__action" disabled={items.length < 2 || running} onClick={run}>
             {running ? 'Comparing…' : result && !stale ? '↻ Compare again' : '▶ Compare'}
           </button>
         </div>

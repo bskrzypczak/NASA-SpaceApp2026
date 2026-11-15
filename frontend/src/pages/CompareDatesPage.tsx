@@ -131,7 +131,7 @@ export function CompareDatesPage() {
           <span className="eyebrow">
             {sel.name ?? 'Custom point'} · {sel.missionDays}-day mission · landing {sel.landingTime.slice(11, 16)} UTC · {horizonModel === 'real' ? 'real terrain' : 'flat horizon'}
           </span>
-          <h1 className="hero-title" style={{ fontSize: 36, marginTop: 6 }}>
+          <h1 className="hero-title" style={{ fontSize: 30, marginTop: 4 }}>
             Pick a better landing day
           </h1>
           <p className="muted" style={{ margin: '6px 0 0' }}>
@@ -197,14 +197,16 @@ export function CompareDatesPage() {
 
           <section className="panel dates-year" aria-label="12-month outlook">
             <div className="dates-year__head">
-              <h2 style={{ fontSize: 20 }}>12-month outlook · {view.y}</h2>
+              <h2 style={{ fontSize: 17, margin: 0 }}>
+                12-month outlook · {view.y}
+                {!yearWanted && <span className="muted dates-year__hint"> — how good days cluster across the year (takes a while)</span>}
+              </h2>
               {!yearWanted && (
                 <button type="button" className="btn" onClick={() => setYearWanted(true)}>
                   Load full year
                 </button>
               )}
             </div>
-            {!yearWanted && <p className="muted" style={{ margin: 0 }}>Shows how good landing days cluster across the year. The full year can take a while to compute.</p>}
             {year.loading && <LoadingNote what={`all of ${view.y}`} />}
             {year.error && (
               <p className="error" style={{ margin: 0 }}>
@@ -242,17 +244,17 @@ export function CompareDatesPage() {
                 </div>
               )}
 
-              <dl className="details">
+              <dl className="details dates-side__stats">
                 <div>
-                  <dt>Min battery</dt>
+                  <dt>Battery min</dt>
                   <dd>{Math.round(pick.minSocPct)} %</dd>
                 </div>
                 <div>
-                  <dt>Earth in view</dt>
+                  <dt>Earth view</dt>
                   <dd>{Math.round(pick.earthVisiblePct)} %</dd>
                 </div>
                 <div>
-                  <dt>Longest night</dt>
+                  <dt>Max night</dt>
                   <dd>{Math.round(pick.longestNightH)} h</dd>
                 </div>
               </dl>
@@ -260,12 +262,14 @@ export function CompareDatesPage() {
               <button type="button" className="btn btn--primary btn--lg" onClick={() => applyDate(pick.date, 'simulate')}>
                 ▶ Simulate this date
               </button>
-              <button type="button" className="btn" onClick={() => applyDate(pick.date, 'site')} disabled={pick.date === yourDate}>
-                Set as landing date
-              </button>
-              <button type="button" className="btn" onClick={() => addToComparison(pick.date)} disabled={pick.date === yourDate}>
-                + Add to comparison
-              </button>
+              <div className="dates-side__secondary">
+                <button type="button" className="btn" onClick={() => applyDate(pick.date, 'site')} disabled={pick.date === yourDate}>
+                  Set as landing
+                </button>
+                <button type="button" className="btn" onClick={() => addToComparison(pick.date)} disabled={pick.date === yourDate}>
+                  + Compare
+                </button>
+              </div>
             </>
           ) : (
             <span className="muted">{loading ? 'Computing…' : 'No data for these months.'}</span>
@@ -323,7 +327,7 @@ function MonthGrid({
   const count = monthEnd(y, m).getUTCDate();
   return (
     <section className="panel month" aria-label={`${MONTHS[m]} ${y}`}>
-      <h2 style={{ fontSize: 20, marginBottom: 12 }}>
+      <h2 style={{ fontSize: 18, margin: "0 0 8px" }}>
         {MONTHS[m]} {y}
       </h2>
       <div className="month__grid month__dow" aria-hidden="true">
@@ -362,7 +366,7 @@ function MonthGrid({
                 {t === 'risky' ? '▼' : ''}
                 {d.successPct}
               </span>
-              <span className="day__tag">{isBest ? '★ BEST' : isYours ? 'YOURS' : ''}</span>
+              {(isBest || isYours) && <span className="day__tag">{isBest ? '★ BEST' : 'YOURS'}</span>}
             </button>
           );
         })}

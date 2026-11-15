@@ -32,6 +32,8 @@
 
   /* Shape */
   --radius-sm: 10px;
+  /* Top bar: 44 px tap targets + 2 × 8 px padding + 1 px border */
+  --topbar-h: 61px;
   --radius-md: 16px;
   --radius-pill: 999px;
   --tap: 44px; /* minimum touch target */

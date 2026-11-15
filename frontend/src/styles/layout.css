@@ -48,8 +48,9 @@
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  padding: 16px 40px;
+  gap: 12px;
+  padding: 8px 32px;
+  min-height: var(--topbar-h);
   border-bottom: 1px solid var(--border);
   background: var(--bg);
 }
@@ -65,7 +66,7 @@
 .brand__name {
   font-family: var(--font-heading);
   font-weight: 900;
-  font-size: 20px;
+  font-size: 18px;
   letter-spacing: 0.05em;
 }
 

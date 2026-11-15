@@ -22,13 +22,49 @@
 .dates-months {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 20px;
+  gap: 16px;
+}
+
+/* Compact so the two months, the outlook row and the side panel fit one laptop screen. */
+.dates-page {
+  padding-top: 16px;
+  gap: 14px;
+}
+
+.dates-main {
+  gap: 12px;
+}
+
+.dates-months .panel {
+  padding: 14px 16px;
+}
+
+.dates-months .panel h2 {
+  margin: 0 0 8px;
+  font-size: 18px;
+}
+
+.dates-year {
+  padding: 12px 16px;
+}
+
+.dates-year__hint {
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.dates-side {
+  gap: 8px;
+}
+
+.dates-side .panel {
+  padding: 16px 20px;
 }
 
 .month__grid {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 6px;
+  gap: 4px;
 }
 
 .month__dow {
@@ -41,8 +77,8 @@
 }
 
 .day {
-  min-height: 62px;
-  padding: 6px 4px;
+  min-height: 60px;
+  padding: 3px 2px;
   border-radius: 10px;
   border: 1px solid transparent;
   display: flex;
@@ -98,8 +134,8 @@ button.day:hover {
 }
 
 .day__tag {
-  min-height: 12px;
-  font-size: 10px;
+  font-size: 9px;
+  line-height: 1;
   font-weight: 700;
   letter-spacing: 0.06em;
 }
@@ -115,7 +151,7 @@ button.day:hover {
 .dates-side__date {
   font-family: var(--font-heading);
   font-weight: 900;
-  font-size: 26px;
+  font-size: 22px;
 }
 
 .dates-side__score {
@@ -127,7 +163,7 @@ button.day:hover {
 .dates-side__pct {
   font-family: var(--font-heading);
   font-weight: 900;
-  font-size: 56px;
+  font-size: 48px;
   line-height: 1;
 }
 
@@ -207,4 +243,38 @@ button.day:hover {
   .dates-months {
     grid-template-columns: 1fr;
   }
+}
+
+/* Three readouts side by side instead of three rows */
+dl.details.dates-side__stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+dl.details.dates-side__stats > div {
+  flex-direction: column;
+  gap: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+dl.details.dates-side__stats dt {
+  font-size: 12px;
+}
+
+.dates-side__secondary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.dates-side__secondary .btn {
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.dates-page {
+  padding-bottom: 8px;
 }

@@ -53,10 +53,15 @@ export function SitePage() {
           <Link to="/">Moon</Link>
           <span aria-hidden="true">/</span>
           <span>{site?.region ?? (lat <= -80 ? 'South pole' : 'Custom')}</span>
+          {site && (
+            <>
+              <span aria-hidden="true">·</span>
+              <span>{site.program}</span>
+            </>
+          )}
         </nav>
 
         <div>
-          <span className="eyebrow">Landing site{site ? ` · ${site.program}` : ''}</span>
           <h1 className="site-page__title">{title}</h1>
           {site && <p className="muted" style={{ margin: '6px 0 0' }}>{site.status} · coordinates approximate</p>}
         </div>
@@ -121,15 +126,14 @@ export function SitePage() {
         )}
 
         <MissionForm />
-        <Link to="/dates" className="btn" style={{ justifyContent: 'space-between', textTransform: 'none', letterSpacing: 0 }}>
-          <span>📅 Compare landing dates</span>
-          <span className="muted mono">calendar →</span>
-        </Link>
-
-        <Link to="/nearby" className="btn nearby-link">
-          <span>◎ See better places nearby</span>
-          <span className="mono muted" style={{ textTransform: 'none', letterSpacing: 0 }}>sensitivity map →</span>
-        </Link>
+        <div className="site-page__links">
+          <Link to="/dates" className="btn site-page__link">
+            <span aria-hidden="true">📅</span> Compare dates
+          </Link>
+          <Link to="/nearby" className="btn site-page__link">
+            <span aria-hidden="true">◎</span> Nearby sites
+          </Link>
+        </div>
 
         <button
           type="button"
@@ -138,7 +142,7 @@ export function SitePage() {
         >
           ▶ Start simulation
         </button>
-        <p className="muted" style={{ margin: '-12px 0 0', fontSize: 13, textAlign: 'center' }}>
+        <p className="muted" style={{ margin: '-6px 0 0', fontSize: 12, textAlign: 'center' }}>
           Sun &amp; Earth from JPL Horizons · terrain from LOLA
         </p>
       </aside>
@@ -182,14 +186,12 @@ function CoordinateEditor({ lat, lon, onApply }: { lat: number; lon: number; onA
         <span className="eyebrow">Longitude</span>
         <input inputMode="decimal" value={lonText} onChange={(e) => setLonText(e.target.value)} aria-invalid={pLon === null} />
       </label>
-      <div className="coord-editor__foot">
-        <span className="mono" style={{ color: 'var(--accent)', fontSize: 13 }}>
-          {formatLat(lat, 4)} · {formatLon(lon, 4)}
-        </span>
-        <button type="submit" className="btn" disabled={!changed} style={{ minHeight: 40, padding: '0 14px', fontSize: 12 }}>
-          Apply
-        </button>
-      </div>
+      <button type="submit" className="btn coord-editor__apply" disabled={!changed}>
+        Apply
+      </button>
+      <span className="mono coord-editor__fmt">
+        {formatLat(lat, 4)} · {formatLon(lon, 4)}
+      </span>
       {(pLat === null || pLon === null) && (
         <span className="error" role="alert">
           Latitude −90…90, longitude −180…360.

@@ -1,6 +1,33 @@
 /* ---------- Confirm popup (screen 4) ---------- */
 .modal--xl {
   max-width: 1280px;
+  /* Header and footer stay put; only the body scrolls if the screen is very short. */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  max-height: calc(100dvh - 32px);
+}
+
+.modal-backdrop:has(.modal--xl) {
+  padding: 16px;
+}
+
+.modal--xl .modal__header {
+  padding: 14px 24px;
+}
+
+.modal--xl .modal__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 18px 24px;
+  gap: 20px;
+}
+
+.modal--xl .modal__footer {
+  flex: none;
+  padding: 14px 24px;
+  border-top: 1px solid var(--border);
 }
 
 .confirm__route {
@@ -13,7 +40,8 @@
 
 .confirm__scene {
   position: relative;
-  height: 440px;
+  /* Shrinks with the viewport so the whole popup fits without scrolling. */
+  height: clamp(220px, calc(100dvh - 470px), 440px);
   border-radius: var(--radius-md);
   overflow: hidden;
   border: 1px solid var(--border);
@@ -45,7 +73,29 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 14px;
+}
+
+.confirm__side .launch-picker {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* The list fills whatever height the route column leaves next to the details. */
+.confirm__side .launch-picker__list {
+  flex: 1 1 0;
+  min-height: 150px;
+  max-height: none;
+}
+
+.confirm__side dl.details {
+  gap: 8px;
+}
+
+.confirm__side dl.details > div {
+  padding-bottom: 8px;
 }
 
 @media (max-width: 720px) {

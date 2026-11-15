@@ -48,36 +48,99 @@
   font-size: 12px;
 }
 
-.scen-add,
-.scen-req {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 10px;
+/* Add / Requirements rows: label column · controls · action on the right */
+.scen-bar {
+  display: grid;
+  grid-template-columns: 132px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
 }
 
-.scen-add .btn {
-  min-height: 40px;
+.scen-bar__label {
+  margin: 0;
+}
+
+.scen-bar__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.scen-bar__action {
+  justify-self: end;
+}
+
+.scen-chip {
+  min-height: var(--tap);
+  padding: 0 16px;
   font-size: 12px;
 }
 
 .scen-select {
-  min-height: 40px;
-  padding: 0 12px;
+  min-height: var(--tap);
+  max-width: 260px;
+  padding: 0 36px 0 16px;
   border-radius: var(--radius-pill);
   border: 1px solid var(--border-strong);
-  background: var(--deep-blue);
+  background: transparent url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%23ffffff' stroke-width='2'/%3E%3C/svg%3E") no-repeat right 14px center;
+  appearance: none;
   color: var(--text);
-  font: 600 13px var(--font-body);
+  font: 700 12px var(--font-body);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.scen-select option {
+  background: var(--deep-blue);
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.scen-select:disabled,
+.scen-chip:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .scen-req__field {
-  width: 200px;
-  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-right: 16px;
+  font-size: 14px;
 }
 
-.scen-req__field input {
-  min-height: 44px;
+.scen-num {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+}
+
+.scen-num input {
+  width: 76px;
+  min-height: var(--tap);
+  padding: 0 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text);
+  font: 400 16px var(--font-mono);
+  text-align: right;
+}
+
+@media (max-width: 720px) {
+  .scen-bar {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .scen-bar__controls {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
 }
 
 .scen-reco {

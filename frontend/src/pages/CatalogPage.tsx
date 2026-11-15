@@ -98,7 +98,7 @@ export function CatalogPage() {
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
             <strong>{sites.loading ? 'Loading…' : `${rows.length} sites`}</strong>
             <span className="muted" style={{ fontSize: 13 }}>
-              Source: {sites.data?.source ?? '…'} · coordinates approximate, verify in LROC QuickMap
+              Source: LROC QuickMap
             </span>
           </div>
           <div className="table-wrap">
