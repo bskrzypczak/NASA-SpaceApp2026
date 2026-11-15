@@ -1,6 +1,14 @@
 import io
 import math
 import os
+from pathlib import Path
+
+try:  # backend/.env (GROQ_API_KEY, FRONTEND_ORIGINS, …) — optional
+    from dotenv import load_dotenv
+
+    load_dotenv(Path(__file__).resolve().parents[1] / ".env")
+except ImportError:  # pragma: no cover
+    pass
 from datetime import datetime, timezone
 from typing import Literal
 
@@ -13,6 +21,7 @@ from app.api_utils import API_PREFIX, normalize_longitude
 from app.calendar_routes import router as calendar_router
 from app.heightmap_source import fetch_lunar_heightmap
 from app.horizon_source import fetch_horizon
+from app.luna_routes import router as luna_router
 from app.layer_grid_source import (
     LayerGridDataError,
     build_slope_grid,
@@ -400,6 +409,7 @@ app.include_router(simulation_router)
 app.include_router(calendar_router)
 app.include_router(nearby_router)
 app.include_router(validation_router)
+app.include_router(luna_router)
 
 
 @app.get(f"{API_PREFIX}/layers")

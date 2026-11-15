@@ -53,7 +53,7 @@ interface GetOptions<T> extends RequestOptions {
   cacheIf?: (data: T) => boolean;
 }
 
-async function readError(res: Response): Promise<ApiError> {
+export async function readError(res: Response): Promise<ApiError> {
   let body: (ApiErrorBody & { error: { retryAfterS?: number } }) | null = null;
   try {
     body = await res.json();

@@ -1,8 +1,16 @@
 # Status backendu
 
-Aktualizacja: 2026-11-14
+Aktualizacja: 2026-11-15
 
 ## Zrobione
+
+- Dodano Lunę — wyjaśnienia AI: `POST /api/v1/luna` (strumień NDJSON) i
+  `GET /api/v1/luna/status`. Sześć tematów z osobnymi promptami
+  (`site-intro`, `sim-score`, `sim-worst`, `sim-sun`, `scen-why`,
+  `scen-decide`). Fakty liczone w `app/luna_facts.py`, model Groq tylko je
+  opowiada; bez `GROQ_API_KEY` lub przy błędzie Groq odpowiedź z szablonu.
+  Klucz w `backend/.env` (`.env.example`, `.gitignore`), zależności `groq` i
+  `python-dotenv`. Testy: `tests/test_luna.py`.
 
 - Utworzono backend FastAPI z endpointami `/health`, `/api/v1/sites`,
   `/api/v1/sites/{id}`, `/api/v1/terrain/point`, `/api/v1/terrain/heightmap`,

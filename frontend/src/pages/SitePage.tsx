@@ -6,6 +6,7 @@ import { useSelection } from '../store/selection';
 import { useApi } from '../hooks/useApi';
 import { apiMode, getQuickTerrain, getTerrainPoint } from '../api/client';
 import { SITES } from '../data/sites';
+import { Luna } from '../components/luna/Luna';
 import { formatLat, formatLon, fromQuery, parseLat, parseLon, toQuery } from '../lib/coords';
 import './SitePage.css';
 
@@ -61,9 +62,38 @@ export function SitePage() {
           )}
         </nav>
 
-        <div>
-          <h1 className="site-page__title">{title}</h1>
-          {site && <p className="muted" style={{ margin: '6px 0 0' }}>{site.status} · coordinates approximate</p>}
+        <div className="site-page__head">
+          <div>
+            <h1 className="site-page__title">{title}</h1>
+            {site && <p className="muted" style={{ margin: '6px 0 0' }}>{site.status} · coordinates approximate</p>}
+          </div>
+          {!location.pathname.endsWith('/confirm') && (
+            <Luna
+              placement="inline"
+              compact
+              buttonLabel={site && /landed|sample|lost/i.test(site.status) ? 'Its story' : 'About this place'}
+              contextKey={`${lat.toFixed(4)},${lon.toFixed(4)}`}
+              contextLabel={`Looking at ${title}`}
+              questions={[
+                {
+                  topic: 'site-intro',
+                  label: site && /landed|sample|lost/i.test(site.status) ? 'What happened here?' : 'Tell me about this place',
+                  request: () => ({
+                    topic: 'site-intro',
+                    siteId: site?.id,
+                    lat,
+                    lon,
+                    name: name ?? undefined,
+                    terrain: {
+                      elevationM: elevationM ?? null,
+                      slopeDeg: terrain.data?.slopeDeg ?? quick.data?.slopeDeg ?? null,
+                      psr: terrain.data?.inPermanentShadow ?? null,
+                    },
+                  }),
+                },
+              ]}
+            />
+          )}
         </div>
 
         <CoordinateEditor lat={lat} lon={lon} onApply={(p) => selectSite({ ...p, name: null })} />

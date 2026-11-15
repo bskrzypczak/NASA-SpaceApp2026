@@ -9,6 +9,7 @@ import { defaultHorizonModel, siteRef } from '../lib/requests';
 import { formatLat, formatLon } from '../lib/coords';
 import './ScenariosPage.css';
 import { StepLoader } from '../components/StepLoader';
+import { Luna, type LunaQuestion } from '../components/luna/Luna';
 
 const WINDOW_DAYS = 30;
 const STEP_MIN = 10;
@@ -329,6 +330,20 @@ export function ScenariosPage() {
       <p className="muted" style={{ margin: 0, fontSize: 13 }}>
         Need a different date? <Link to="/dates">Open the calendar</Link> and use “Add to comparison”.
       </p>
+      <Luna
+        contextKey={result && resultKey ? `${resultKey}|${result.results.map((r) => r.simulationId).join(',')}` : 'none'}
+        contextLabel={result ? `Comparing ${result.results.length} scenarios` : 'Scenario comparison'}
+        unavailable={
+          running
+            ? 'Comparing the scenarios… ask me as soon as the results are in.'
+            : !result
+              ? 'Add scenarios and press Compare — then I can explain which one wins and why.'
+              : stale
+                ? 'The scenarios changed since the last comparison. Press Compare again and I will explain the new results.'
+                : null
+        }
+        questions={result && resultKey ? scenarioQuestions(result, (JSON.parse(resultKey) as ScenarioCompareRequest).requirements) : []}
+      />
     </main>
   );
 }
@@ -387,4 +402,19 @@ function RunningNote({ count }: { count: number }) {
       hint="New sites download terrain first; repeated comparisons are much faster."
     />
   );
+}
+
+/* ---------- Luna ---------- */
+
+function scenarioQuestions(result: ScenarioCompareResponse, requirements: ScenarioCompareRequest['requirements']): LunaQuestion[] {
+  const base = {
+    scenarios: result.results.map((r) => ({ label: r.label, simulationId: r.simulationId })),
+    requirements: requirements ?? { minSocPct: 20, minEarthVisiblePct: 50 },
+    recommendation: result.recommendation,
+  };
+  const winner = result.recommendation?.label;
+  return [
+    { topic: 'scen-why', label: winner ? `Why does ${winner} win?` : 'Why does nothing qualify?', request: () => ({ topic: 'scen-why', ...base }) },
+    { topic: 'scen-decide', label: 'Slip the date or move the site?', request: () => ({ topic: 'scen-decide', ...base }) },
+  ];
 }

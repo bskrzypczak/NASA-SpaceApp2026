@@ -890,6 +890,14 @@ python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 `http://127.0.0.1:8000/api/v1`, health check pod
 `http://127.0.0.1:8000/api/v1/health`, a Swagger pod `http://127.0.0.1:8000/docs`.
 
+### Luna (AI) — klucz API
+
+Skopiuj `backend/.env.example` do `backend/.env` i wpisz `GROQ_API_KEY=...`
+(plik `.env` jest w `.gitignore`, nie commitujemy go). `app/main.py` wczytuje
+`backend/.env` przy starcie, więc po zmianie klucza zrestartuj serwer.
+Bez klucza Luna działa dalej i odpowiada tekstem z szablonu (te same fakty,
+bez modelu). Stan: `GET /api/v1/luna/status` → `{"enabled": true, "model": "…"}`.
+
 ### Demo
 
 Przed prezentacją rozgrzej cache i uruchom serwer bez `--reload`:
@@ -904,3 +912,48 @@ uruchomionego serwera. Cache jest zapisywany domyślnie w `backend/.cache/`;
 jeśli ustawiasz `HORIZON_CACHE_DIR`, użyj tej samej wartości podczas warm-upu
 i uruchamiania serwera. Katalog musi być zapisywalny i nie może być usuwany,
 jeśli cache ma przetrwać restart.
+
+
+## 10. Luna — wyjaśnienia AI (`POST /api/v1/luna`)
+
+Luna niczego nie liczy ani nie wyszukuje. **Fakty liczy Python**
+(`app/luna_facts.py`) z danych, które backend już ma: katalog miejsc z krótkimi
+notkami historycznymi, zapisane wyniki symulacji (`SIMULATIONS` / cache),
+profil horyzontu. Model (Groq) dostaje te fakty w bloku `FACTS` i tylko je
+opowiada. Każdy przypadek użycia ma osobny prompt (`app/luna_prompts.py`).
+
+| `topic` | Ekran | Wymagane pola | Co robi | `focusDay` |
+|---|---|---|---|---|
+| `site-intro` | Site | `lat`, `lon` (+ `siteId`, `name`, `terrain`) | historia miejsca (misje z przeszłości), co teren znaczy dla lądownika | — |
+| `sim-score` | Simulation | `simulationId` | rozkład wyniku na 3 czynniki, co najbardziej obniża ocenę | — |
+| `sim-worst` | Simulation | `simulationId` | najgorszy moment misji (minimum baterii, ciemność przed nim, łączność) | dzień minimum |
+| `sim-sun` | Simulation | `simulationId` | co zasłania Słońce: kierunek, wysokość i odległość grzbietu | start najdłuższego cienia terenu |
+| `scen-why` | Scenarios | `scenarios[{label,simulationId}]`, `requirements`, `recommendation` | dlaczego wygrywa rekomendowany scenariusz | — |
+| `scen-decide` | Scenarios | jw. | przesunąć datę czy zmienić miejsce | — |
+
+Odpowiedź to strumień NDJSON (jeden obiekt JSON na linię):
+
+```
+{"type":"meta","source":"ai"|"template","cached":false,"focusDay":9.0,"model":"qwen/qwen3.8-27b"}
+{"type":"delta","text":"The critical moment …"}
+…
+{"type":"done"}            // albo {"type":"error","message":"…"} po przerwanym strumieniu
+```
+
+- `400 VALIDATION_ERROR` przy brakujących polach, `404` gdy `simulationId` nie jest znane.
+- Odpowiedzi modelu są trzymane w pamięci (200 wpisów) per zapytanie; `refresh: true` wymusza nową.
+- Gdy Groq zawiedzie przed pierwszym słowem, Luna przechodzi na szablon
+  (`source: "template"`), więc panel nigdy nie zostaje pusty.
+- Bloki `<think>…</think>` są wycinane, a `reasoning_format` domyślnie `hidden`.
+
+Zmienne (`backend/.env`):
+
+| Zmienna | Domyślnie | Opis |
+|---|---|---|
+| `GROQ_API_KEY` | — | klucz Groq; bez niego tryb szablonów |
+| `LUNA_MODEL` | `qwen/qwen3.8-27b` | model Groq |
+| `LUNA_TEMPERATURE` | `0.4` | niżej = trzyma się faktów |
+| `LUNA_MAX_TOKENS` | `2048` | limit odpowiedzi (z ukrytym rozumowaniem) |
+| `LUNA_REASONING_EFFORT` | `medium` | puste = nie wysyłaj; niżej = szybsze pierwsze słowo |
+| `LUNA_REASONING_FORMAT` | `hidden` | puste = nie wysyłaj |
+| `LUNA_TIMEOUT_S` | `45` | timeout jednego wywołania Groq |

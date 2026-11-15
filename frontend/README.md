@@ -136,6 +136,20 @@ Wejścia: zakładka **Scenarios** w top barze, „Scenarios” na ekranie Simula
 - Wynik: kolumny ze szansą, werdyktem, różnicą do baseline, ✓/! przy metrykach z wymagań, „Open simulation” (wynik z backendu po `simulationId`); pasy okien pracy (Sun+Earth / Sun / Earth / dark) z kreską końca misji; **rekomendacja** backendu (reguła: najlepszy spełniający wymagania, przy różnicy < 3 pkt wygrywa bez zmiany daty).
 - Po zmianie listy wyniki są oznaczane jako nieaktualne do ponownego „Compare”. Wyniki cache'owane per zapytanie.
 
+## Luna — asystentka AI
+
+Przycisk z avatarem Luny otwiera panel z gotowymi pytaniami. Każde pytanie to osobny prompt na backendzie (`POST /luna`, opis w `backend/README.md` §10), a odpowiedź spływa na żywo.
+
+| Ekran | Gdzie jest przycisk | Pytania |
+|---|---|---|
+| Site | avatar obok nazwy miejsca | „What happened here?” (miejsca misji) / „Tell me about this place” |
+| Simulation | prawy dolny róg sceny 3D | „Why this score?”, „Worst moment of the mission”, „What blocks the Sun?” — dwa ostatnie przewijają oś czasu do opisywanego momentu |
+| Scenarios | pływający przycisk w rogu ekranu | „Why does X win?”, „Slip the date or move the site?” (aktywne po Compare) |
+
+- Kod: `src/components/luna/` (komponent, style, avatar `luna-avatar.svg`: podmień plik lub import, żeby użyć zdjęcia), klient strumienia `src/api/luna.ts`.
+- Pod odpowiedzią widać źródło: „AI · model”, „Built-in summary (AI offline)” (backend bez klucza) albo „Mock answer”.
+- Tryb mock: przykładowe odpowiedzi, bez backendu. Klucz API jest tylko na backendzie (`backend/.env`), nigdy we froncie.
+
 ## Backend i tryby API
 
 Skopiuj `.env.example` do `.env.local`:

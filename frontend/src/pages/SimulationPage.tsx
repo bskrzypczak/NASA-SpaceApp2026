@@ -8,11 +8,12 @@ import { useApi } from '../hooks/useApi';
 import { SITES } from '../data/sites';
 import { skyAt } from '../lib/sky';
 import { formatLat, formatLon, toQuery } from '../lib/coords';
-import { SimScene3D, VERTICAL_EXAGGERATION, isSystemView, type CameraMode } from '../components/sim/SimScene3D';
+import { SimScene3D, type CameraMode } from '../components/sim/SimScene3D';
 import { SkyView } from '../components/sim/SkyView';
 import { StatusCards, SuccessCard, Timeline } from '../components/sim/SimPanels';
 import { DEFAULT_HARDWARE } from '../lib/simModel';
 import { ProPanel } from '../components/pro/ProPanel';
+import { Luna, type LunaQuestion } from '../components/luna/Luna';
 import { defaultHorizonModel, siteRef } from '../lib/requests';
 import './SimulationPage.css';
 
@@ -290,6 +291,18 @@ export function SimulationPage() {
             </div>
           )}
         </div>
+        <div className="sim-stage__luna">
+          <Luna
+            placement="inline"
+            contextKey={shown.id}
+            contextLabel={`Simulation · ${siteName}`}
+            questions={simQuestions(shown.id)}
+            onFocusDay={(day) => {
+              setPlaying(false);
+              setT(Math.min(windowDays, Math.max(0, day)));
+            }}
+          />
+        </div>
         <div className="sim-stage__site">
           <strong>{siteName}</strong>
           <span className="mono" style={{ color: 'var(--accent)' }}>
@@ -336,6 +349,16 @@ export function SimulationPage() {
       )}
     </main>
   );
+}
+
+/* ---------- Luna ---------- */
+
+function simQuestions(simulationId: string): LunaQuestion[] {
+  return [
+    { topic: 'sim-score', label: 'Why this score?', request: () => ({ topic: 'sim-score', simulationId }) },
+    { topic: 'sim-worst', label: 'Worst moment of the mission', request: () => ({ topic: 'sim-worst', simulationId }) },
+    { topic: 'sim-sun', label: 'What blocks the Sun?', request: () => ({ topic: 'sim-sun', simulationId }) },
+  ];
 }
 
 /* ---------- Loading & messages ---------- */
