@@ -16,7 +16,10 @@ from app.sources import (
     single_flight,
 )
 
+# Keys use "horizon-v3": profiles carry distanceKm / observerElevationM and use near+far DEM tiers.
 HORIZON_CACHE_TTL = 24 * 60 * 60
+# Up to this distance the horizon is read from the sharp ~100 m/px window; beyond it from the ~400 m/px one.
+HORIZON_NEAR_LIMIT_M = 40_000
 HORIZON_MAX_DISTANCE_KM = 150.0
 HORIZON_RAY_STEP_M = 100.0
 GLOBAL_DEM_PIXELS_PER_DEGREE = 256
@@ -46,7 +49,18 @@ def _horizon_profile_from_dem(
     bin_deg: float,
     projection: str = "south-polar",
     max_distance_m: float = HORIZON_MAX_DISTANCE_KM * 1000,
+    extras: dict[str, Any] | None = None,
+    far: dict[str, Any] | None = None,
+    near_limit_m: float = HORIZON_NEAR_LIMIT_M,
 ) -> tuple[list[float], list[float]]:
+    """Horizon elevation per azimuth bin.
+
+    ``far`` (optional) is a coarser DEM covering the full radius: samples farther than ``near_limit_m``
+    (or outside the near DEM) are read from it. Keys: dem, left, top, pixel_width, pixel_height, nodata.
+
+    If ``extras`` is given it is filled with ``distanceKm`` (distance of the sample that sets the
+    horizon in each bin, i.e. the blocking ridge) and ``observerElevationM`` (DEM height at the site).
+    """
     import numpy as np
 
     if pixel_width <= 0 or pixel_height <= 0:
@@ -93,6 +107,7 @@ def _horizon_profile_from_dem(
     east_y = cos_longitude
 
     horizon_elevations: list[float] = []
+    horizon_distances_km: list[float] = []
     observer_elevation = center_elevation + height_m
     for offset in range(0, azimuth_count, 64):
         bearing = np.radians(azimuths[offset : offset + 64])[:, None]
@@ -132,24 +147,25 @@ def _horizon_profile_from_dem(
         else:
             raise HorizonDataError(f"Unsupported DEM projection: {projection}.")
 
-        col_indices = np.floor(
-            (projected_x - left) / pixel_width
-        ).astype(np.int32)
-        row_indices = np.floor(
-            (top - projected_y) / pixel_height
-        ).astype(np.int32)
-        in_bounds = (
-            (row_indices >= 0)
-            & (row_indices < rows_count)
-            & (col_indices >= 0)
-            & (col_indices < cols_count)
-        )
-        safe_rows = np.clip(row_indices, 0, rows_count - 1)
-        safe_cols = np.clip(col_indices, 0, cols_count - 1)
-        elevations = dem[safe_rows, safe_cols]
-        valid = in_bounds & np.isfinite(elevations)
-        if nodata is not None and math.isfinite(nodata):
-            valid &= elevations != nodata
+        def sample(raster: Any, r_left: float, r_top: float, r_pw: float, r_ph: float, r_nodata: Any) -> tuple[Any, Any]:
+            rows_n, cols_n = raster.shape
+            col_idx = np.floor((projected_x - r_left) / r_pw).astype(np.int32)
+            row_idx = np.floor((r_top - projected_y) / r_ph).astype(np.int32)
+            inside = (row_idx >= 0) & (row_idx < rows_n) & (col_idx >= 0) & (col_idx < cols_n)
+            values = raster[np.clip(row_idx, 0, rows_n - 1), np.clip(col_idx, 0, cols_n - 1)]
+            ok = inside & np.isfinite(values)
+            if r_nodata is not None and math.isfinite(r_nodata):
+                ok &= values != r_nodata
+            return values, ok
+
+        elevations, valid = sample(dem, left, top, pixel_width, pixel_height, nodata)
+        if far is not None:
+            far_values, far_valid = sample(
+                far["dem"], far["left"], far["top"], far["pixel_width"], far["pixel_height"], far["nodata"]
+            )
+            use_far = (distances[None, :] > near_limit_m) | ~valid
+            elevations = np.where(use_far, far_values, elevations)
+            valid = np.where(use_far, far_valid, valid)
         if not np.all(np.any(valid, axis=1)):
             raise HorizonOutOfCoverageError(
                 "The DEM does not cover the full horizon radius."
@@ -168,7 +184,13 @@ def _horizon_profile_from_dem(
         horizon_elevations.extend(
             float(value) for value in np.max(angles, axis=1)
         )
+        horizon_distances_km.extend(
+            float(value) / 1000 for value in distances[np.argmax(angles, axis=1)]
+        )
 
+    if extras is not None:
+        extras["distanceKm"] = [round(value, 2) for value in horizon_distances_km]
+        extras["observerElevationM"] = round(center_elevation, 1)
     return (
         [round(float(value), 3) for value in azimuths],
         [round(value, 3) for value in horizon_elevations],
@@ -185,6 +207,8 @@ def _horizon_profile_from_dataset(
     height_m: float,
     bin_deg: float,
     projection: str,
+    extras: dict[str, Any] | None = None,
+    far: dict[str, Any] | None = None,
 ) -> tuple[list[float], list[float]]:
     if projection == "south-polar":
         center_x, center_y = _south_polar_stereographic_xy(lat, lon)
@@ -208,14 +232,47 @@ def _horizon_profile_from_dataset(
         height_m=height_m,
         bin_deg=bin_deg,
         projection=projection,
+        extras=extras,
+        far=far,
     )
+
+
+def _profile_with_extras(
+    dem: Any, dataset: Any, far: dict[str, Any] | None = None, **kwargs: Any
+) -> tuple[list[float], list[float], dict[str, Any]]:
+    extras: dict[str, Any] = {}
+    azimuths, elevations = _horizon_profile_from_dataset(
+        dem, transform=dataset.transform, nodata=dataset.nodata, extras=extras, far=far, **kwargs
+    )
+    return azimuths, elevations, extras
+
+
+def _far_raster(far_bytes: bytes | None) -> dict[str, Any] | None:
+    """Decode the coarse far-field window into the dict `_horizon_profile_from_dem` expects."""
+    if far_bytes is None:
+        return None
+    import numpy as np
+    from rasterio.io import MemoryFile
+
+    with MemoryFile(far_bytes) as memory_file:
+        with memory_file.open() as dataset:
+            transform = dataset.transform
+            return {
+                "dem": np.asarray(dataset.read(1)),
+                "left": transform.c,
+                "top": transform.f,
+                "pixel_width": transform.a,
+                "pixel_height": -transform.e,
+                "nodata": dataset.nodata,
+            }
 
 
 def _horizon_profiles_from_tiff(
     raster_bytes: bytes,
     requests: list[tuple[float, float, float, float]],
     projection: str,
-) -> list[tuple[list[float], list[float]]]:
+    far_bytes: bytes | None = None,
+) -> list[tuple[list[float], list[float], dict[str, Any]]]:
     try:
         import numpy as np
         import rasterio
@@ -226,14 +283,15 @@ def _horizon_profiles_from_tiff(
         ) from exc
 
     try:
+        far = _far_raster(far_bytes)
         with MemoryFile(raster_bytes) as memory_file:
             with memory_file.open() as dataset:
                 dem = np.asarray(dataset.read(1))
                 return [
-                    _horizon_profile_from_dataset(
+                    _profile_with_extras(
                         dem,
-                        transform=dataset.transform,
-                        nodata=dataset.nodata,
+                        dataset,
+                        far,
                         lat=lat,
                         lon=lon,
                         height_m=height_m,
@@ -251,7 +309,7 @@ async def fetch_horizon(
 ) -> dict[str, Any]:
     service = _dem_service_for_latitude(lat)
     key = (
-        f"horizon:{service['version']}:{lat:.5f}:{lon:.5f}:"
+        f"horizon-v3:{service['version']}:{lat:.5f}:{lon:.5f}:"
         f"{height_m:.2f}:{bin_deg:.1f}"
     )
     cached = _cache_get(key)
@@ -272,15 +330,19 @@ async def _fetch_horizon(
 ) -> dict[str, Any]:
     from app.dem_window_source import fetch_dem_window
 
-    dem_window = await fetch_dem_window(lat, lon, service)
+    near_window, far_window = await asyncio.gather(
+        fetch_dem_window(lat, lon, service, tier="near", required_margin_m=HORIZON_NEAR_LIMIT_M),
+        fetch_dem_window(lat, lon, service, tier="far"),
+    )
     try:
         profiles = await asyncio.to_thread(
             _horizon_profiles_from_tiff,
-            dem_window.content,
+            near_window.content,
             [(lat, lon, height_m, bin_deg)],
             service["projection"],
+            far_window.content,
         )
-        azimuths, elevations = profiles[0]
+        azimuths, elevations, extras = profiles[0]
     except HorizonOutOfCoverageError as exc:
         raise HTTPException(
             status_code=422,
@@ -309,6 +371,7 @@ async def _fetch_horizon(
         "maxDistanceKm": HORIZON_MAX_DISTANCE_KM,
         "azimuthDeg": azimuths,
         "elevationDeg": elevations,
+        **extras,
         "features": [],
         "demVersion": service["version"],
         "demResolutionM": round(resolution_m, 1),
@@ -333,7 +396,7 @@ async def prepare_horizon_profiles(
         services[service["version"]] = service
         for height_m in heights_m:
             key = (
-                f"horizon:{service['version']}:{lat:.5f}:{lon:.5f}:"
+                f"horizon-v3:{service['version']}:{lat:.5f}:{lon:.5f}:"
                 f"{height_m:.2f}:{bin_deg:.1f}"
             )
             if _cache_get(key) is None:
@@ -368,17 +431,27 @@ async def prepare_horizon_profiles(
                 for lat, lon, _, _ in requests
             )
 
-        dem_window = await fetch_dem_window(
-            *window_center,
-            service,
-            required_margin_m=HORIZON_MAX_DISTANCE_KM * 1000 + margin_m,
+        near_window, far_window = await asyncio.gather(
+            fetch_dem_window(
+                *window_center,
+                service,
+                tier="near",
+                required_margin_m=HORIZON_NEAR_LIMIT_M + margin_m,
+            ),
+            fetch_dem_window(
+                *window_center,
+                service,
+                tier="far",
+                required_margin_m=HORIZON_MAX_DISTANCE_KM * 1000 + margin_m,
+            ),
         )
         try:
             profiles = await asyncio.to_thread(
                 _horizon_profiles_from_tiff,
-                dem_window.content,
+                near_window.content,
                 requests,
                 service["projection"],
+                far_window.content,
             )
         except HorizonOutOfCoverageError as exc:
             raise HTTPException(
@@ -400,11 +473,11 @@ async def prepare_horizon_profiles(
                 2 * math.pi * MOON_RADIUS_KM * 1000 / 360
                 / GLOBAL_DEM_PIXELS_PER_DEGREE
             )
-        for (lat, lon, height_m, profile_bin), (azimuths, elevations) in zip(
+        for (lat, lon, height_m, profile_bin), (azimuths, elevations, extras) in zip(
             requests, profiles
         ):
             key = (
-                f"horizon:{version}:{lat:.5f}:{lon:.5f}:"
+                f"horizon-v3:{version}:{lat:.5f}:{lon:.5f}:"
                 f"{height_m:.2f}:{profile_bin:.1f}"
             )
             _cache_set(
@@ -417,6 +490,7 @@ async def prepare_horizon_profiles(
                     "maxDistanceKm": HORIZON_MAX_DISTANCE_KM,
                     "azimuthDeg": azimuths,
                     "elevationDeg": elevations,
+                    **extras,
                     "features": [],
                     "demVersion": version,
                     "demResolutionM": round(resolution_m, 1),

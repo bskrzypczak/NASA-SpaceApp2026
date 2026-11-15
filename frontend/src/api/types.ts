@@ -98,6 +98,10 @@ export interface HorizonProfile {
   azimuthDeg: number[];
   /** terrain elevation angle per azimuth bin, degrees above the flat horizon */
   elevationDeg: number[];
+  /** Distance (km) of the ridge that sets the horizon in each bin. Older backends: missing. */
+  distanceKm?: number[];
+  /** DEM height at the site (m, vs 1737.4 km), without heightM. */
+  observerElevationM?: number;
   features: { name: string; azFromDeg: number; azToDeg: number; maxElevationDeg: number }[];
   demVersion: string;
   demResolutionM?: number;

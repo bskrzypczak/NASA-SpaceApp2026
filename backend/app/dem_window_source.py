@@ -19,9 +19,16 @@ DEM_WINDOW_TILE_SIZE_M = 10_000
 DEM_WINDOW_TILE_SIZE_DEG = math.degrees(
     DEM_WINDOW_TILE_SIZE_M / MOON_RADIUS_M
 )
-DEM_WINDOW_HALF_SIZE_M = 170_000
-DEM_WINDOW_IMAGE_SIZE_PX = 3041
 GLOBAL_DEM_PIXELS_PER_DEGREE = 256
+# Two tiers instead of one 340 km window at full resolution (~38 MB, often timed out on Moon Trek):
+# a sharp near window for the terrain that matters most, and a coarse far window for distant ridges.
+DEM_WINDOW_TIERS: dict[str, dict[str, float]] = {
+    "near": {"half_size_m": 60_000, "image_px": 1201, "geo_ppd": 256},  # ~100 m/px, ~5.8 MB
+    "far": {"half_size_m": 170_000, "image_px": 851, "geo_ppd": 64},  # ~400 m/px, ~3 MB
+}
+# Kept for callers/tests that only know the far window.
+DEM_WINDOW_HALF_SIZE_M = DEM_WINDOW_TIERS["far"]["half_size_m"]
+DEM_WINDOW_IMAGE_SIZE_PX = DEM_WINDOW_TIERS["far"]["image_px"]
 
 
 @dataclass(frozen=True)
@@ -31,6 +38,7 @@ class DemWindow:
     center_x: float
     center_y: float
     half_size_m: float
+    tier: str = "far"
 
 
 def _projected_coordinates(
@@ -45,8 +53,10 @@ def _projected_coordinates(
     raise ValueError(f"Unsupported DEM window projection: {projection}.")
 
 
-def _window_key(service: dict[str, Any], tile_x: int, tile_y: int) -> str:
-    return f"{service['version']}-{tile_x}-{tile_y}"
+def _window_key(
+    service: dict[str, Any], tile_x: int, tile_y: int, tier: str = "far"
+) -> str:
+    return f"{service['version']}-{tier}-{tile_x}-{tile_y}"
 
 
 def _candidate_tiles(
@@ -88,7 +98,9 @@ async def find_cached_dem_window(
     service: dict[str, Any] | None = None,
     *,
     required_margin_m: float = 0.0,
+    tier: str = "near",
 ) -> DemWindow | None:
+    half_size_m = DEM_WINDOW_TIERS[tier]["half_size_m"]
     selected_service = service or _dem_service_for_latitude(lat)
     projection = selected_service["projection"]
     projected_x, projected_y = _projected_coordinates(lat, lon, projection)
@@ -104,7 +116,7 @@ async def find_cached_dem_window(
     for candidate_x, candidate_y in _candidate_tiles(
         tile_x, tile_y, search_radius
     ):
-        key = _window_key(selected_service, candidate_x, candidate_y)
+        key = _window_key(selected_service, candidate_x, candidate_y, tier)
         content = await read_dem_window(key)
         if content is None:
             continue
@@ -118,14 +130,15 @@ async def find_cached_dem_window(
             center_y,
             projection,
         )
-        if DEM_WINDOW_HALF_SIZE_M - offset_m < required_margin_m:
+        if half_size_m - offset_m < required_margin_m:
             continue
         return DemWindow(
             key=key,
             content=content,
             center_x=center_x,
             center_y=center_y,
-            half_size_m=DEM_WINDOW_HALF_SIZE_M,
+            half_size_m=half_size_m,
+            tier=tier,
         )
     return None
 
@@ -136,6 +149,7 @@ async def fetch_dem_window(
     service: dict[str, Any] | None = None,
     *,
     required_margin_m: float = 150_000.0,
+    tier: str = "far",
 ) -> DemWindow:
     selected_service = service or _dem_service_for_latitude(lat)
     projection = selected_service["projection"]
@@ -144,6 +158,7 @@ async def fetch_dem_window(
         lon,
         selected_service,
         required_margin_m=required_margin_m,
+        tier=tier,
     )
     if cached is not None:
         return cached
@@ -156,11 +171,11 @@ async def fetch_dem_window(
     )
     tile_x = math.floor(projected_x / tile_size)
     tile_y = math.floor(projected_y / tile_size)
-    key = _window_key(selected_service, tile_x, tile_y)
+    key = _window_key(selected_service, tile_x, tile_y, tier)
     # One download per window even if a simulation, /horizon and /nearby ask at once.
     return await single_flight(
         f"demwindow:{key}",
-        lambda: _download_dem_window(selected_service, projection, tile_x, tile_y, tile_size, key),
+        lambda: _download_dem_window(selected_service, projection, tile_x, tile_y, tile_size, key, tier),
     )
 
 
@@ -171,31 +186,34 @@ async def _download_dem_window(
     tile_y: int,
     tile_size: float,
     key: str,
+    tier: str = "far",
 ) -> DemWindow:
     cached = await read_dem_window(key)
     center_x = (tile_x + 0.5) * tile_size
     center_y = (tile_y + 0.5) * tile_size
-    half_size = DEM_WINDOW_HALF_SIZE_M
+    settings = DEM_WINDOW_TIERS[tier]
+    half_size = settings["half_size_m"]
+    ppd = settings["geo_ppd"]
     if cached is not None:
-        return DemWindow(key=key, content=cached, center_x=center_x, center_y=center_y, half_size_m=half_size)
+        return DemWindow(key=key, content=cached, center_x=center_x, center_y=center_y, half_size_m=half_size, tier=tier)
 
     if projection == "geographic":
         latitude_radius = math.degrees(half_size / MOON_RADIUS_M)
         longitude_radius = latitude_radius / max(
             abs(math.cos(math.radians(center_y))), 1e-6
         )
-        padding = 2 / GLOBAL_DEM_PIXELS_PER_DEGREE
+        padding = 2 / ppd
         left = center_x - longitude_radius - padding
         right = center_x + longitude_radius + padding
         bottom = center_y - latitude_radius - padding
         top = center_y + latitude_radius + padding
         width = min(
             4096,
-            math.ceil((right - left) * GLOBAL_DEM_PIXELS_PER_DEGREE),
+            math.ceil((right - left) * ppd),
         )
         height = min(
             4096,
-            math.ceil((top - bottom) * GLOBAL_DEM_PIXELS_PER_DEGREE),
+            math.ceil((top - bottom) * ppd),
         )
         image_size = f"{width},{height}"
     else:
@@ -203,7 +221,8 @@ async def _download_dem_window(
         right = center_x + half_size
         bottom = center_y - half_size
         top = center_y + half_size
-        image_size = f"{DEM_WINDOW_IMAGE_SIZE_PX},{DEM_WINDOW_IMAGE_SIZE_PX}"
+        image_px = int(settings["image_px"])
+        image_size = f"{image_px},{image_px}"
 
     params = {
         "bbox": f"{left},{bottom},{right},{top}",
@@ -229,4 +248,5 @@ async def _download_dem_window(
         center_x=center_x,
         center_y=center_y,
         half_size_m=half_size,
+        tier=tier,
     )

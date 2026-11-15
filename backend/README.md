@@ -187,18 +187,24 @@ Query:
   "maxDistanceKm": 150,
   "azimuthDeg": [0, 0.5, 1.0, "…", 359.5],
   "elevationDeg": [0.35, 0.36, 0.38, "…", 0.34],
+  "distanceKm": [12.4, 12.6, 3.1, "…", 41.0],
+  "observerElevationM": -1840.2,
   "features": [],
   "demVersion": "LRO_LOLA_DEM_SPole45_100mp_v04",
   "demResolutionM": 100
 }
 ```
 
+- `distanceKm[i]` — odległość próbki DEM, która wyznacza horyzont w danym kierunku (blokujący grzbiet; `argmax` kąta po odległości). Front stawia tam grzbiet w scenie 3D, więc wycinek terenu ma tę samą skalę co kula Księżyca.
+- `observerElevationM` — wysokość DEM w miejscu lądowania (bez `heightM`), względem 1737,4 km.
+- Klucz cache: `horizon-v2:…` (stare profile bez tych pól nie są używane).
+
 Używane przez widok **Sky 360°**. `features` są opcjonalne (etykiety gór na panoramie).
 Obecna implementacja zwraca `features: []` i liczy profil z DEM NASA Moon Trek
 o nominalnej rozdzielczości 100 m/px, nie z planowanego DEM PGDA 5/20 m/px.
 Pierwsze żądanie pobiera obraz obejmujący promień 150 km i jest cache'owane
 na dysku jako GeoTIFF; gotowy profil jest cache'owany w SQLite przez 24 godziny.
-Pobrania Moon Trek współdzielą limit dwóch równoczesnych żądań i ponawiają
+Pobrania Moon Trek idą pasem `bulk` (patrz §6.1) i ponawiają
 `RemoteProtocolError`/`ReadTimeout` maksymalnie dwa razy.
 
 ### 4.5 `GET /ephemeris` — surowe pozycje Słońca i Ziemi
@@ -728,12 +734,13 @@ Domyślne wagi: `wP = 0.5`, `wC = 0.3`, `wN = 0.2`. **Front i backend muszą lic
 
 | Mechanizm | Gdzie | Po co |
 |---|---|---|
-| Dwa pasy do Moon Trek: `light` (4 równoległe) i `bulk` (1) | `sources._get_moon_trek_response(lane=…)` | eksport wycinka DEM 340 km (~38 MB) idzie pasem `bulk` i nie blokuje małych zapytań (wysokość punktu, małe heightmapy, siatki) |
+| Dwa pasy do Moon Trek: `light` (4 równoległe) i `bulk` (1) | `sources._get_moon_trek_response(lane=…)` | eksporty wycinków DEM idą pasem `bulk` i nie blokuje małych zapytań (wysokość punktu, małe heightmapy, siatki) |
 | `single_flight(key)` | `sources.py`; użyte w wycinku DEM, `/horizon`, heightmapie, `/terrain/point`, efemerydach | równoległe zapytania o to samo (symulacja + `/horizon` + `/nearby`, podwójny render frontu) robią **jedno** pobranie; rozłączenie klienta nie przerywa pracy innym |
 | Timeouty GDAL (`gdal_http_env()`) + `run_remote_raster()` (45 s) | PSR, siatki PSR i widoczności | odczyty `/vsicurl` z PGDA nie miały timeoutu i potrafiły zawiesić wątek na zawsze — razem z `/terrain/point` |
 | Częściowa odpowiedź `/terrain/point` | `sources._fetch_lunar_elevation` | błąd sąsiedniej próbki lub PSR nie kasuje wysokości (`complete: false`) |
 | Ponowienia | Moon Trek: 2× (`RemoteProtocolError`, `ReadTimeout`), Horizons: 1× | zerwane połączenia NASA zwykle przechodzą za drugim razem |
 | Siatka PSR: NoData = „nie PSR” | `layer_grid_source._sample_psr_dataset` | raster PGDA zawiera tylko piksele PSR; `null` tylko poza zasięgiem rastra. `/nearby` nie wyklucza komórek z `psr = null` |
+| Dwa poziomy wycinka DEM | `dem_window_source.DEM_WINDOW_TIERS`, `horizon_source.HORIZON_NEAR_LIMIT_M` | zamiast jednego wycinka 340 km w 100 m/px (~38 MB, często timeout na Moon Trek): `near` 120 km × 120 km w ~100 m/px (~5,8 MB) i `far` 340 km × 340 km w ~400 m/px (~3 MB). Horyzont do 40 km od lądowiska liczony z `near`, dalej z `far`. Wysokość punktu i heightmapy używają `near`. Klucze wycinków mają nazwę poziomu (`…-near-x-y`, `…-far-x-y`); stare pliki 38 MB można usunąć z `.cache/dem-windows` |
 | Margines wycinka DEM dla heightmapy | `heightmap_source` | wycinek z cache musi pokrywać cały kwadrat (pół przekątnej + 500 m) — wcześniej punkt przy krawędzi dawał fałszywe `OUT_OF_DEM_COVERAGE` |
 
 - Odpowiedzi GET z `ETag` + `Cache-Control: public, max-age=86400` (dane się nie zmieniają).

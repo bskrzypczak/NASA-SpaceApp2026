@@ -8,7 +8,7 @@ import { useApi } from '../hooks/useApi';
 import { SITES } from '../data/sites';
 import { skyAt } from '../lib/sky';
 import { formatLat, formatLon, toQuery } from '../lib/coords';
-import { SimScene3D, VERTICAL_EXAGGERATION, type CameraMode } from '../components/sim/SimScene3D';
+import { SimScene3D, VERTICAL_EXAGGERATION, isSystemView, type CameraMode } from '../components/sim/SimScene3D';
 import { SkyView } from '../components/sim/SkyView';
 import { StatusCards, SuccessCard, Timeline } from '../components/sim/SimPanels';
 import { DEFAULT_HARDWARE } from '../lib/simModel';
@@ -203,6 +203,7 @@ export function SimulationPage() {
   }
 
   const sky = skyAt(ts, Math.min(t, windowDays - (ts.stepMin / 1440) * 1.01));
+  const skyStart = skyAt(ts, 0);
   const siteName = shown.site.name ?? (SITES.find((s) => Math.abs(s.lat - shown.site.lat) < 1e-6 && Math.abs(s.lon - shown.site.lon) < 1e-6)?.name ?? 'Custom point');
   const realPct = base && baseIsReal ? base.summary.successPct : null;
   const flatPct = base?.summary.flatHorizonSuccessPct ?? null;
@@ -235,9 +236,9 @@ export function SimulationPage() {
         </div>
         {view === '3d' && (
           <div className="segmented" role="group" aria-label="Camera">
-            {(['orbit', 'lander', 'top'] as CameraMode[]).map((c) => (
+            {(['orbit', 'overview', 'lander', 'top'] as CameraMode[]).map((c) => (
               <button key={c} type="button" aria-pressed={camera === c} onClick={() => setCamera(c)}>
-                {c === 'orbit' ? 'Orbit' : c === 'lander' ? 'Lander view' : 'Top-down'}
+                {c === 'orbit' ? 'Orbit' : c === 'overview' ? 'Overview' : c === 'lander' ? 'Lander view' : 'Top-down'}
               </button>
             ))}
           </div>
@@ -266,7 +267,7 @@ export function SimulationPage() {
 
       <div className="sim-stage">
         {view === '3d' ? (
-          <SimScene3D sky={sky} horizon={realTerrain ? horizon.data : null} realTerrain={realTerrain} camera={camera} />
+          <SimScene3D lat={shown.site.lat} lon={shown.site.lon} sky={sky} skyStart={skyStart} horizon={realTerrain ? horizon.data : null} realTerrain={realTerrain} camera={camera} />
         ) : (
           <SkyView ts={ts} sky={sky} horizon={realTerrain ? horizon.data : null} />
         )}
@@ -277,7 +278,7 @@ export function SimulationPage() {
           </span>
         </div>
         <div className="sim-stage__note mono">
-          {view === '3d' ? `Vertical scale ×${VERTICAL_EXAGGERATION} · ` : 'True scale · '}
+          {view === '3d' ? `Vertical scale ×${VERTICAL_EXAGGERATION} · ${isSystemView(camera) ? 'Earth–Moon system, distances shortened' : 'ground view'} · ` : 'True scale · '}
           {realTerrain ? (horizon.loading ? 'loading terrain horizon…' : horizon.data ? `horizon ${horizon.data.demVersion}` : `horizon unavailable${horizon.error ? ` (${horizon.error.message})` : ''}`) : 'flat horizon'} · ephemeris JPL Horizons
         </div>
       </div>

@@ -11,6 +11,7 @@ from app.dem_window_source import fetch_dem_window
 from app.heightmap_source import fetch_lunar_heightmap
 from app.horizon_source import (
     HORIZON_MAX_DISTANCE_KM,
+    HORIZON_NEAR_LIMIT_M,
     prepare_horizon_profiles,
 )
 from app.layer_grid_source import build_slope_grid, fetch_psr_grid
@@ -154,10 +155,19 @@ async def find_nearby(request: NearbyRequest) -> dict[str, Any]:
     ]
 
     size_km = _heightmap_size_km(request.radiusKm)
-    await fetch_dem_window(
-        center_lat,
-        center_lon,
-        required_margin_m=HORIZON_MAX_DISTANCE_KM * 1000 + radius_m,
+    await asyncio.gather(
+        fetch_dem_window(
+            center_lat,
+            center_lon,
+            tier="near",
+            required_margin_m=HORIZON_NEAR_LIMIT_M + radius_m,
+        ),
+        fetch_dem_window(
+            center_lat,
+            center_lon,
+            tier="far",
+            required_margin_m=HORIZON_MAX_DISTANCE_KM * 1000 + radius_m,
+        ),
     )
     heightmap, psr_grid = await asyncio.gather(
         fetch_lunar_heightmap(center_lat, center_lon, size_km, 16),

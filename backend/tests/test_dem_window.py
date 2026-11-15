@@ -48,7 +48,7 @@ def test_dem_window_is_cached_on_disk_and_reused_for_nearby_coordinates(
     assert observed[0][0] == (
         DEM_SERVICES["south-pole"]["url"].rsplit("/", 1)[0] + "/exportImage"
     )
-    assert observed[0][1]["size"] == "3041,3041"
+    assert observed[0][1]["size"] == "851,851"  # far tier: ~400 m/px
     left, bottom, right, top = map(
         float, observed[0][1]["bbox"].split(",")
     )
@@ -62,14 +62,14 @@ def test_horizon_profiles_for_nearby_points_share_one_dem_window(monkeypatch):
     cached_profiles = []
 
     async def fake_get_dem_window(
-        lat, lon, service, *, required_margin_m
+        lat, lon, service, *, required_margin_m, tier
     ):
-        window_requests.append((lat, lon, service, required_margin_m))
-        return SimpleNamespace(content=b"shared-window")
+        window_requests.append((lat, lon, service, required_margin_m, tier))
+        return SimpleNamespace(content=f"{tier}-window".encode())
 
-    def fake_profiles(content, requests, projection):
-        profile_batches.append((content, requests, projection))
-        return [([0.0], [1.0]) for _ in requests]
+    def fake_profiles(content, requests, projection, far_bytes=None):
+        profile_batches.append((content, requests, projection, far_bytes))
+        return [([0.0], [1.0], {"distanceKm": [3.0], "observerElevationM": 0.0}) for _ in requests]
 
     monkeypatch.setattr(
         "app.dem_window_source.fetch_dem_window", fake_get_dem_window
@@ -97,9 +97,13 @@ def test_horizon_profiles_for_nearby_points_share_one_dem_window(monkeypatch):
         )
     )
 
-    assert len(window_requests) == 1
-    assert window_requests[0][3] == 160_000
+    # One near + one far window shared by all points.
+    assert sorted((request[4], request[3]) for request in window_requests) == [
+        ("far", 160_000),
+        ("near", 50_000),
+    ]
     assert len(profile_batches) == 1
-    assert profile_batches[0][0] == b"shared-window"
+    assert profile_batches[0][0] == b"near-window"
+    assert profile_batches[0][3] == b"far-window"
     assert len(profile_batches[0][1]) == 6
     assert len(cached_profiles) == 6

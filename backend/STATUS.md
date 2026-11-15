@@ -169,6 +169,18 @@ Aktualizacja: 2026-11-14
   - `/nearby` nie wyklucza komórek z `psr = null` (poza mapą PSR, np. na
     północy): to „nie wiadomo”, a nie „niebezpiecznie”.
 
+- `/horizon` (2026-11-15): nowe pola `distanceKm[]` (odległość blokującego grzbietu
+  w każdym kierunku) i `observerElevationM` (wysokość DEM w miejscu lądowania).
+  Klucz cache zmieniony na `horizon-v2`. Front używa tych pól do skali terenu w 3D.
+
+- Wycinki DEM (2026-11-15, noc): jeden wycinek 340 km w 100 m/px (~38 MB) często
+  przekraczał limit czasu Moon Trek (504, „lunar DEM service timed out”), a przez to
+  `/horizon`, symulacja i `/nearby` wisiały kilka minut. Teraz są dwa poziomy:
+  `near` (120 km, ~100 m/px, ~5,8 MB) i `far` (340 km, ~400 m/px, ~3 MB), razem
+  około 4× mniej danych. Horyzont do 40 km od lądowiska liczony jest z `near`,
+  dalej z `far`. Klucz cache horyzontu zmieniony na `horizon-v3`. Stare pliki
+  wycinków (bez `-near-`/`-far-` w nazwie) można usunąć. Testy: `97 passed`.
+
 ## Do zrobienia
 
 - Kafelki mapowe (`/layers/{layer}/tiles/...`) nadal nie są serwowane; aktualny

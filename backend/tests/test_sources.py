@@ -389,6 +389,45 @@ def test_horizon_profile_accounts_for_curvature_and_directional_ridge():
     assert ridge_horizon[0] > 25.0
     assert ridge_horizon[1:] == flat_horizon[1:]
 
+    extras = {}
+    _horizon_profile_from_dem(dem, **parameters, extras=extras)
+    # Ridge pixel row 3 is 200–300 m north of the centre (row 5): the blocking sample is there.
+    assert 0.2 <= extras["distanceKm"][0] <= 0.3
+    assert extras["observerElevationM"] == 0.0
+
+
+def test_horizon_profile_reads_far_ridges_from_the_coarse_far_window():
+    # Near window: flat, only ±250 m. Far window: coarse 200 m pixels with a 500 m ridge ~600 m north.
+    near = np.zeros((5, 5), dtype=np.float32)
+    far = np.zeros((9, 9), dtype=np.float32)
+    far[1, 4] = 500.0  # row 1 = 500–700 m north of the centre
+    common = {
+        "center_x": 0.0,
+        "center_y": 0.0,
+        "lat": -90.0,
+        "lon": 0.0,
+        "height_m": 2.0,
+        "bin_deg": 90.0,
+        "max_distance_m": 800.0,
+        "nodata": None,
+    }
+    extras = {}
+    _, elevations = _horizon_profile_from_dem(
+        near,
+        left=-250.0,
+        top=250.0,
+        pixel_width=100.0,
+        pixel_height=100.0,
+        far={"dem": far, "left": -900.0, "top": 900.0, "pixel_width": 200.0, "pixel_height": 200.0, "nodata": None},
+        near_limit_m=200.0,
+        extras=extras,
+        **common,
+    )
+
+    assert elevations[0] > 30.0  # ridge to the north comes from the far window
+    assert elevations[2] < 0.0  # south stays flat
+    assert 0.5 <= extras["distanceKm"][0] <= 0.7
+
 
 @pytest.mark.parametrize(
     ("bin_deg", "expected_count"),
@@ -454,14 +493,14 @@ def test_fetch_horizon_selects_dem_service_and_reports_its_metadata(
     monkeypatch, lat, service_name, projection, resolution_m
 ):
     observed = {}
-    async def fake_dem_window(used_lat, used_lon, used_service):
+    async def fake_dem_window(used_lat, used_lon, used_service, **_kwargs):
         observed["service"] = used_service
         return SimpleNamespace(content=b"test-window")
 
-    def fake_profiles(_raster_bytes, requests, used_projection):
+    def fake_profiles(_raster_bytes, requests, used_projection, _far_bytes=None):
         observed["projection"] = used_projection
         observed["requests"] = requests
-        return [([0.0], [0.0])]
+        return [([0.0], [0.0], {"distanceKm": [150.0], "observerElevationM": 0.0})]
 
     monkeypatch.setattr(
         "app.dem_window_source.fetch_dem_window", fake_dem_window

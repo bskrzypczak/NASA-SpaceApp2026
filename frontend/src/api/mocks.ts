@@ -89,6 +89,7 @@ export function mockHorizon(lat: number, lon: number, heightM = 2): HorizonProfi
   const bumps = Array.from({ length: 5 }, () => ({ az: r() * 360, width: 15 + r() * 40, height: 0.3 + r() * 1.0 }));
   const azimuthDeg: number[] = [];
   const elevationDeg: number[] = [];
+  const distanceKm: number[] = [];
   for (let i = 0; i < 720; i++) {
     const az = i * 0.5;
     let el = 0.1 + 0.1 * Math.sin((az * Math.PI) / 30);
@@ -98,8 +99,10 @@ export function mockHorizon(lat: number, lon: number, heightM = 2): HorizonProfi
     }
     azimuthDeg.push(az);
     elevationDeg.push(+el.toFixed(3));
+    // Higher horizon = nearer ridge (a few km for big walls, tens of km for low distant hills).
+    distanceKm.push(+(8 + 60 * Math.exp(-el * 1.2) + 10 * Math.sin((az * Math.PI) / 45) ** 2).toFixed(2));
   }
-  return { lat, lon, heightM, binDeg: 0.5, maxDistanceKm: 150, azimuthDeg, elevationDeg, features: [], demVersion: 'MOCK', mock: true };
+  return { lat, lon, heightM, binDeg: 0.5, maxDistanceKm: 150, azimuthDeg, elevationDeg, distanceKm, observerElevationM: -1200, features: [], demVersion: 'MOCK', mock: true };
 }
 
 /** Plausible polar-ish geometry: Sun circles the sky once per synodic month, Earth wobbles with libration. */

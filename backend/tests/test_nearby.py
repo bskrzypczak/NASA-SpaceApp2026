@@ -43,8 +43,8 @@ def test_nearby_evaluates_bounded_safe_grid_and_returns_ranked_suggestions(
         values[8][12] = 1
         return {"values": values}
 
-    async def fake_dem_window(lat, lon, *, required_margin_m):
-        dem_windows.append((lat, lon, required_margin_m))
+    async def fake_dem_window(lat, lon, *, required_margin_m, tier):
+        dem_windows.append((lat, lon, required_margin_m, tier))
 
     async def fake_prepare_profiles(
         center_lat,
@@ -106,7 +106,10 @@ def test_nearby_evaluates_bounded_safe_grid_and_returns_ranked_suggestions(
     assert result["suggestions"][0]["rank"] == "A"
     assert result["suggestions"][0]["successPct"] == 80
     assert "+2.8 days of sunlight" in result["suggestions"][0]["why"]
-    assert dem_windows == [(-89.45, -137.3, 152_500)]
+    assert sorted(dem_windows, key=lambda item: item[3]) == [
+        (-89.45, -137.3, 152_500, "far"),
+        (-89.45, -137.3, 42_500, "near"),
+    ]
     assert len(prepared_profiles) == 1
     (
         center_lat,

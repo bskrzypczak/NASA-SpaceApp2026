@@ -43,8 +43,8 @@ function StarMapBackground({ intensity }: { intensity: number }) {
 function ProceduralStars() {
   return (
     <>
-      <Stars radius={80} depth={40} count={6000} factor={3} saturation={0} fade speed={0.4} />
-      <Stars radius={120} depth={20} count={1500} factor={6} saturation={0} fade speed={0.2} />
+      <Stars radius={12000} depth={3000} count={6000} factor={220} saturation={0} fade speed={0.4} />
+      <Stars radius={16000} depth={2000} count={1500} factor={360} saturation={0} fade speed={0.2} />
     </>
   );
 }
