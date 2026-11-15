@@ -1,5 +1,4 @@
 import { Link, useNavigate } from 'react-router-dom';
-import { Placeholder } from '../components/Placeholder';
 import { CoordinateBar } from '../components/CoordinateBar';
 import { Moon3D } from '../components/moon/Moon3D';
 import { useSelection } from '../store/selection';
@@ -33,13 +32,9 @@ export function ExplorePage() {
             <p style={{ margin: 0, fontSize: 20, color: 'var(--accent)' }}>See when it gets sunlight and when it can call Earth.</p>
           </div>
 
-          <Placeholder
-            label="Featured sites table"
-            note="Short list of notable sites. Clicking a row will fly the 3D camera to it."
-            tag="FeaturedSites · next"
-            minHeight={240}
-          >
-            <div className="chips" style={{ justifyContent: 'center', marginTop: 8 }}>
+          <section className="panel" aria-label="Featured sites" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <span className="eyebrow">Featured sites</span>
+            <div className="chips">
               {featured.map((s) => (
                 <button
                   key={s.id}
@@ -52,7 +47,10 @@ export function ExplorePage() {
                 </button>
               ))}
             </div>
-          </Placeholder>
+            <span className="muted" style={{ fontSize: 13 }}>
+              Pick one to move the pin, or click anywhere on the Moon.
+            </span>
+          </section>
 
           <Link to="/catalog" className="btn" style={{ alignSelf: 'flex-start' }}>
             Browse all {SITES.length} sites →

@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Placeholder } from '../components/Placeholder';
 import { SITE_GROUPS, type SiteGroup } from '../data/sites';
 import type { ApiSite } from '../api/types';
 import { getSites } from '../api/client';
@@ -15,10 +14,29 @@ export function CatalogPage() {
   const navigate = useNavigate();
   const selectSite = useSelection((s) => s.selectSite);
   const [filter, setFilter] = useState<Filter>('All');
+  const [query, setQuery] = useState('');
+  const [latIn, setLatIn] = useState('');
+  const [lonIn, setLonIn] = useState('');
+  const [coordError, setCoordError] = useState<string | null>(null);
 
   const sites = useApi((signal) => getSites(signal), []);
   const all = sites.data?.items ?? [];
-  const rows = all.filter((s) => filter === 'All' || s.group === filter);
+  const q = query.trim().toLowerCase();
+  const rows = all.filter(
+    (s) => (filter === 'All' || s.group === filter) && (!q || `${s.name} ${s.program} ${s.status} ${s.region}`.toLowerCase().includes(q)),
+  );
+
+  function openCoords(e: React.FormEvent) {
+    e.preventDefault();
+    const la = Number(latIn.replace(',', '.'));
+    const lo = Number(lonIn.replace(',', '.'));
+    if (!latIn.trim() || !Number.isFinite(la) || la < -90 || la > 90) return setCoordError('Latitude must be between −90 and 90 (south is negative).');
+    if (!lonIn.trim() || !Number.isFinite(lo) || lo < -180 || lo > 360) return setCoordError('Longitude must be between −180 and 360 (west is negative).');
+    setCoordError(null);
+    const lon180 = lo > 180 ? lo - 360 : lo;
+    selectSite({ lat: la, lon: lon180, name: null });
+    navigate(`/site${toQuery({ lat: la, lon: lon180 })}`);
+  }
   const filters: Filter[] = ['All', ...SITE_GROUPS];
 
   function open(site: ApiSite) {
@@ -47,7 +65,33 @@ export function CatalogPage() {
               ))}
             </div>
           </fieldset>
-          <Placeholder label="Search + custom coordinates" note="Text search over names and agencies, and a lat/lon form." tag="CatalogSearch · next" minHeight={160} />
+          <div className="field">
+            <label htmlFor="catalog-search" className="eyebrow">
+              Search
+            </label>
+            <input id="catalog-search" type="search" placeholder="Name, program, region…" value={query} onChange={(e) => setQuery(e.target.value)} />
+          </div>
+          <form className="panel" onSubmit={openCoords} style={{ display: 'flex', flexDirection: 'column', gap: 10 }} aria-label="Open custom coordinates" noValidate>
+            <span className="eyebrow">Custom coordinates</span>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <div className="field" style={{ flex: 1, minWidth: 0 }}>
+                <label htmlFor="catalog-lat">Lat °</label>
+                <input id="catalog-lat" style={{ width: "100%", minWidth: 0 }} inputMode="decimal" placeholder="-89.45" value={latIn} onChange={(e) => setLatIn(e.target.value)} />
+              </div>
+              <div className="field" style={{ flex: 1, minWidth: 0 }}>
+                <label htmlFor="catalog-lon">Lon °</label>
+                <input id="catalog-lon" style={{ width: "100%", minWidth: 0 }} inputMode="decimal" placeholder="-137.3" value={lonIn} onChange={(e) => setLonIn(e.target.value)} />
+              </div>
+            </div>
+            {coordError && (
+              <p className="error" role="alert" style={{ margin: 0 }}>
+                ! {coordError}
+              </p>
+            )}
+            <button type="submit" className="btn btn--primary">
+              Open site →
+            </button>
+          </form>
         </aside>
 
         <section style={{ flex: '999 1 640px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>

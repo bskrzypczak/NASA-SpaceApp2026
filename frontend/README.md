@@ -12,14 +12,20 @@ npm run build    # produkcyjny build do dist/
 
 ## Ekrany i trasy
 
-| # | Ekran | Trasa | Co już działa |
+| # | Ekran | Trasa | Co działa |
 |---|---|---|---|
-| 1 | Explore | `/` | placeholder tabeli i modelu 3D, szybki wybór miejsca, pasek LAT/LON z walidacją, **Next** → Site |
-| 2 | Catalog | `/catalog` | lista 19 miejsc z filtrami programów, **Open** → Site |
-| 3 | Site | `/site?lat=..&lon=..` | pokazuje LAT/LON z ekranu 1 lub 2 (z URL), **Start simulation** → popup |
-| 4 | Popup potwierdzenia | `/site/confirm?lat=..&lon=..` | modal nad Site: Esc, klik w tło i **Back** zamykają |
+| 1 | Explore | `/` | obracany model 3D Księżyca z pinezką, wyróżnione miejsca, pasek LAT/LON z wysokością, **Next** → Site |
+| 2 | Catalog | `/catalog` | 19 miejsc, filtry programów, wyszukiwarka (nazwa / program / region), formularz własnych współrzędnych |
+| 3 | Site | `/site?lat=..&lon=..` | mapa (zdjęcia / teren LOLA) z warstwami Slope, PSR, Sunlight, Earth visibility; dane punktu; **Start simulation** |
+| 3b | Nearby | `/nearby` | mapa wrażliwości 3×3 i lepsze miejsca w pobliżu |
+| 4 | Popup potwierdzenia | `/site/confirm` | trasa Ziemia → Księżyc, wybór kosmodromu |
+| 5 | Simulation (Basic) | `/simulation/:id` | scena 3D / Sky 360°, karty Słońce / Ziemia / bateria, oś czasu, wynik misji |
+| 6 | Simulation (Pro) | `/simulation/:id?mode=pro` | wykresy, zdarzenia, walidacja vs PGDA, eksport, źródła — patrz niżej |
+| 7 | Mission brief | `/simulation/:id/brief` | jedna strona A4 do druku / PDF |
+| 8 | Compare dates | `/dates` | kalendarz dni lądowania |
+| 9 | Scenarios | `/scenarios` | porównanie 2–4 scenariuszy |
 
-Top bar: Explore / Catalog / Site — link Site niesie aktualne współrzędne.
+Top bar: Explore / Catalog / Site / Simulation / Dates / Scenarios — link Site niesie aktualne współrzędne.
 
 ## Model 3D Księżyca (ekran 1)
 
@@ -98,6 +104,19 @@ Kamery: Orbit / Overview (z daleka: makieta + Słońce + Ziemia) / Lander view (
 - Miejsca na północ od 80° S: backend nie ma tam DEM → wysyłamy `horizonModel: "flat"` automatycznie.
 - **Tryb mock:** `src/lib/simModel.ts` to port 1:1 wzorów z `backend/app/simulation.py` (sprawdzony — te same wyniki na tych samych danych wejściowych).
 
+## Ekran 6 · Simulation — tryb Pro (`?mode=pro`)
+
+Przełącznik **Basic / Pro** w pasku symulacji; tryb jest w URL, więc link otwiera ten sam widok. Panel pod osią czasu (`src/components/pro/`):
+
+- **Charts** — trzy wykresy na wspólnej osi dni (`TimeChart.tsx`, czyste SVG): wysokość Słońca vs teren w jego azymucie, to samo dla Ziemi (szare pole = horyzont terenu, zacienione pasy = okna widoczności z backendu), stan baterii z linią rezerwy. Najechanie = tooltip z wartościami, kliknięcie = przesuwa zegar symulacji (scena 3D i karty się aktualizują). Kolory ciał jak w scenie (Słońce żółte, Ziemia niebieska); każdy wykres ma legendę, a wartości są w tooltipie, więc kolor nie jest jedynym nośnikiem informacji.
+- **Events** — wszystkie wschody / zachody Słońca i Ziemi, bateria na rezerwie, koniec misji; czas UTC, dzień, azymut, wysokość; **Go →** przenosi zegar.
+- **Validation vs PGDA** — `GET /validation` (tylko 65–90° N/S): średni czas w słońcu i z Ziemią w zasięgu z naszego modelu (rok, co godzinę) vs mapy NASA PGDA (18,6 roku), różnica i werdykt w tolerancji ±5 pkt. Uruchamiane przyciskiem (pierwszy raz może trwać ok. minuty).
+- **Data & export** — pobranie pełnego wyniku (JSON) i szeregu czasowego (CSV), kopiowanie linku, założenia modelu (bateria, panele, obciążenia, wagi wyniku) i źródła danych z `GET /meta/sources`.
+
+## Ekran 7 · Mission brief (`/simulation/:id/brief`)
+
+Biała strona A4 (na ekranie jak kartka, w druku bez paska aplikacji): miejsce i wynik z werdyktem, parametry misji i sprzętu, sześć kluczowych liczb, pasek widoczności Słońca / Ziemi i wykres baterii przez całe okno, cztery „readiness checks” (bateria nad rezerwą, najdłuższa noc vs zapas energii, łączność z Ziemią, Słońce przy lądowaniu), rozbicie wyniku na czynniki, zdarzenia w trakcie misji i źródła. **Print / Save as PDF** = `window.print()` z CSS `@media print` (`MissionBriefPage.css`); backendowy `brief.pdf` nie jest potrzebny.
+
 ## Ekran 8 · Compare dates (`/dates`)
 
 Wejścia: „Compare landing dates” na ekranie Site, „Compare dates” i „Find a better date” na ekranie Simulation.
@@ -163,10 +182,9 @@ src/
 
 ## Następne kroki
 
-1. `FeaturedSites` na ekranie 1; w `Moon3D` relief z mapy wysokości (`ldem`) jako bumpMap.
-2. Rysowanie kafelków warstw na mapie Site, gdy backend zacznie zwracać `tileUrl`; ekran Nearby.
-3. `RouteMap` w popupie i ekran Simulation (`/simulation`).
-4. Dane: `public/data/<site>.json` z Horizons + maska horyzontu z LOLA.
+1. Wdrożenie (frontend statycznie, backend z cache `backend/.cache` i rozgrzaniem `python -m scripts.warmup`).
+2. Przegląd dostępności (klawiatura, czytnik ekranu) i widoku mobilnego na wszystkich ekranach.
+3. Materiały do zgłoszenia: nagranie demo, opis projektu, slajdy.
 
 ## Hosting
 

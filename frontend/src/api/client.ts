@@ -1,7 +1,7 @@
 import { slopeFromHeights } from '../lib/layers';
-import type { NearbyRequest, NearbyResponse, ApiSite, CalendarRequest, CalendarResult, ScenarioCompareRequest, ScenarioCompareResponse, Heightmap, HorizonProfile, LayerGrid, LayerId, LayerInfo, SimulationRequest, SimulationResult, TerrainPoint } from './types';
+import type { SourcesMeta, ValidationResult, NearbyRequest, NearbyResponse, ApiSite, CalendarRequest, CalendarResult, ScenarioCompareRequest, ScenarioCompareResponse, Heightmap, HorizonProfile, LayerGrid, LayerId, LayerInfo, SimulationRequest, SimulationResult, TerrainPoint } from './types';
 import { SITES } from '../data/sites';
-import { mockCalendar, mockCompare, mockHeightmap, mockHorizon, mockSimulation, mockTerrainPoint, mockLayerGrid, mockNearby } from './mocks';
+import { mockCalendar, mockCompare, mockHeightmap, mockHorizon, mockSimulation, mockTerrainPoint, mockLayerGrid, mockNearby, mockValidation, MOCK_SOURCES } from './mocks';
 
 import { ApiError, BASE, TIMEOUT, get, post } from './http';
 
@@ -204,4 +204,21 @@ export async function getNearby(req: NearbyRequest, signal?: AbortSignal): Promi
     return mockNearby(req);
   }
   throw new ApiError('BACKEND_OFFLINE', 'No backend configured. Set VITE_API_URL or VITE_USE_MOCKS=true in .env.local.');
+}
+
+/** GET /validation — HORIZON's long-term averages vs PGDA (65–90° N/S only). Slow on first run (a year of hourly ephemeris). */
+export async function getValidation(lat: number, lon: number, signal?: AbortSignal): Promise<ValidationResult> {
+  if (apiMode === 'live') return get<ValidationResult>('/validation', { lat, lon }, { signal, timeoutMs: TIMEOUT.heavy });
+  if (apiMode === 'mock') {
+    await new Promise((r) => setTimeout(r, 700));
+    if (Math.abs(lat) < 65) throw new ApiError('OUT_OF_PGDA_COVERAGE', 'PGDA lunar polar illumination products cover latitudes 65–90 degrees north and south.', 422, 'lat');
+    return mockValidation(lat, lon);
+  }
+  throw new ApiError('BACKEND_OFFLINE', 'No backend configured.');
+}
+
+/** GET /meta/sources — dataset names, versions and links for the "Data & sources" panel. */
+export async function getSources(signal?: AbortSignal): Promise<SourcesMeta> {
+  if (apiMode === 'live') return get<SourcesMeta>('/meta/sources', {}, { signal });
+  return MOCK_SOURCES;
 }

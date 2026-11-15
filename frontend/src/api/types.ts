@@ -314,3 +314,31 @@ export interface NearbyResponse {
   suggestions: NearbySuggestion[];
   mock?: boolean;
 }
+
+/* ---------- Validation vs PGDA (backend /validation) & data sources (/meta/sources) ---------- */
+
+export interface ValidationResult {
+  avgIlluminationPct: { horizon: number; pgda: number | null; lrocWac: null };
+  earthVisibilityPct: { horizon: number; pgda: number | null };
+  deltaMaxPts: number | null;
+  withinTolerance: boolean | null;
+  tolerancePts: number;
+  periodStart: string;
+  periodEnd: string;
+  periodDays: number;
+  samplingStepHours: number;
+  heightM: number;
+  lrocWacNote: string;
+  horizonDemVersion: string;
+  horizonDemResolutionM: number;
+  pgdaVersion: { illumination: string; earthVisibility: string };
+  mock?: boolean;
+}
+
+export interface SourcesMeta {
+  ephemeris: { name: string; version: string; model: string; url: string };
+  terrain: { name: string; southPoleNorthPoleResolutionM: number; globalResolutionPxPerDegree: number; note?: string; url: string };
+  permanentShadow: { name: string; resolutionM: number; coverage: string; url: string };
+  lunarPolarVisibility: { name: string; source: string; averagingPeriodYears: number; coverage: string; resolutionM: number[]; url: string };
+  validationRefs: string[];
+}

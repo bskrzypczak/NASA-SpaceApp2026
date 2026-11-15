@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ApiError, apiMode, createSimulation, getHorizon, getSimulation } from '../api/client';
 import type { HorizonModel, SimulationRequest, SimulationResult } from '../api/types';
 import { useSelection, type SelectionState } from '../store/selection';
@@ -12,6 +12,7 @@ import { SimScene3D, VERTICAL_EXAGGERATION, isSystemView, type CameraMode } from
 import { SkyView } from '../components/sim/SkyView';
 import { StatusCards, SuccessCard, Timeline } from '../components/sim/SimPanels';
 import { DEFAULT_HARDWARE } from '../lib/simModel';
+import { ProPanel } from '../components/pro/ProPanel';
 import { defaultHorizonModel, siteRef } from '../lib/requests';
 import './SimulationPage.css';
 
@@ -136,6 +137,18 @@ export function SimulationPage() {
   const [t, setT] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(6);
+  // Basic / Pro lives in the URL (?mode=pro) so a shared link opens the same view.
+  const [params, setParams] = useSearchParams();
+  const pro = params.get('mode') === 'pro';
+  const setPro = (on: boolean) =>
+    setParams(
+      (p) => {
+        if (on) p.set('mode', 'pro');
+        else p.delete('mode');
+        return p;
+      },
+      { replace: true },
+    );
 
   const baseIsReal = base?.input.horizonModel !== 'flat';
   const shown = showFlat && flatResult ? flatResult : base;
@@ -251,14 +264,14 @@ export function SimulationPage() {
           <Link to="/scenarios" className="btn">
             Scenarios
           </Link>
-          <button type="button" className="btn" disabled title="Mission brief — next sprint">
+          <Link to={`/simulation/${encodeURIComponent(shown.id)}/brief`} className="btn">
             Mission brief
-          </button>
+          </Link>
           <div className="segmented" role="group" aria-label="Mode">
-            <button type="button" aria-pressed="true">
+            <button type="button" aria-pressed={!pro} onClick={() => setPro(false)}>
               Basic
             </button>
-            <button type="button" aria-pressed="false" disabled title="Pro mode — next sprint">
+            <button type="button" aria-pressed={pro} onClick={() => setPro(true)}>
               Pro
             </button>
           </div>
@@ -308,6 +321,17 @@ export function SimulationPage() {
           landingTime={shown.input.landingTime ?? new Date().toISOString()}
         />
       </div>
+
+      {pro && (
+        <ProPanel
+          result={shown}
+          t={t}
+          onT={(v) => {
+            setPlaying(false);
+            setT(v);
+          }}
+        />
+      )}
     </main>
   );
 }

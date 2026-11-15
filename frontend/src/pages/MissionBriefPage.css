@@ -1,0 +1,305 @@
+/* Screen 10 — Mission brief: a white A4 "paper" on screen, the same page when printed. */
+.brief-page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.brief-actions {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+  max-width: 210mm;
+  justify-content: space-between;
+}
+
+.brief {
+  --ink: #0b1a45;
+  --ink-muted: #44506e;
+  --rule: #d5dbe8;
+  width: 100%;
+  max-width: 210mm;
+  min-height: 297mm;
+  padding: 14mm 14mm 12mm;
+  background: #ffffff;
+  color: var(--ink);
+  border-radius: 6px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.brief h2 {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 0 0 6px;
+  color: var(--ink);
+  border-bottom: 2px solid var(--ink);
+  padding-bottom: 3px;
+}
+
+.brief__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  border-bottom: 4px solid var(--ink);
+  padding-bottom: 10px;
+}
+
+.brief__brand {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+.brief__title {
+  margin: 2px 0;
+  font-size: 26px;
+  color: var(--ink);
+}
+
+.brief__coords {
+  font-family: var(--font-mono);
+  color: var(--ink-muted);
+}
+
+.brief__score {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  padding: 8px 14px;
+  border: 3px solid var(--ink);
+  border-radius: 8px;
+  min-width: 150px;
+}
+
+.brief__score.is-risky {
+  border-color: #c2410c;
+}
+
+.brief__pct {
+  font-family: var(--font-heading);
+  font-size: 40px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.brief__verdict {
+  font-weight: 800;
+  letter-spacing: 0.05em;
+}
+
+.brief__score.is-risky .brief__verdict {
+  color: #c2410c;
+}
+
+.brief__small {
+  font-size: 11px;
+  color: var(--ink-muted);
+}
+
+.brief__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+}
+
+.brief__dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 3px 12px;
+  margin: 0;
+}
+
+.brief__dl dt {
+  color: var(--ink-muted);
+}
+
+.brief__dl dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+.brief__kpis {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 8px;
+}
+
+.brief__kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 6px 8px;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+}
+
+.brief__kpi strong {
+  font-size: 18px;
+}
+
+.brief__timeline {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.brief__svgtext {
+  font-size: 12px;
+  font-weight: 700;
+  fill: var(--ink);
+}
+
+.brief__svgtick {
+  font-size: 10px;
+  fill: var(--ink-muted);
+  font-family: var(--font-mono);
+}
+
+.brief__track {
+  fill: #eef1f7;
+}
+
+/* Brand yellow is too light on paper alone: outline it in ink. */
+.brief__sun {
+  fill: #eafe07;
+  stroke: var(--ink);
+  stroke-width: 0.6;
+}
+
+.brief__earth {
+  fill: #2e96f5;
+}
+
+.brief__soc {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 2;
+}
+
+.brief__reserve {
+  stroke: #c2410c;
+  stroke-width: 1.2;
+  stroke-dasharray: 5 4;
+}
+
+.brief__end {
+  stroke: var(--ink-muted);
+  stroke-dasharray: 2 3;
+}
+
+.brief__checks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.brief__checks li {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.brief__mark {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  font-weight: 800;
+  flex: none;
+  border: 2px solid var(--ink);
+}
+
+.brief__checks .is-bad .brief__mark {
+  border-color: #c2410c;
+  color: #c2410c;
+}
+
+.brief__table {
+  width: 100%;
+  border-collapse: collapse;
+  background: transparent; /* the app's tables are dark — paper is white */
+  font-size: 12px;
+}
+
+.brief__table th,
+.brief__table td {
+  text-align: left;
+  padding: 3px 6px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.brief__table th {
+  font-size: 10px;
+  color: var(--ink-muted);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+}
+
+.brief__table td {
+  color: var(--ink);
+}
+
+.brief__foot {
+  margin-top: auto;
+  border-top: 1px solid var(--rule);
+  padding-top: 6px;
+  font-size: 10px;
+  color: var(--ink-muted);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+@media (max-width: 760px) {
+  .brief {
+    min-height: 0;
+    padding: 18px;
+  }
+  .brief__grid {
+    grid-template-columns: 1fr;
+  }
+  .brief__kpis {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media print {
+  @page {
+    size: A4;
+    margin: 0;
+  }
+  body,
+  .app {
+    background: #ffffff !important;
+  }
+  .topbar,
+  .no-print {
+    display: none !important;
+  }
+  .page.brief-page {
+    padding: 0;
+  }
+  .brief {
+    box-shadow: none;
+    border-radius: 0;
+    max-width: none;
+    width: 210mm;
+    min-height: 297mm;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+}

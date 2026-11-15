@@ -1,4 +1,4 @@
-import type { CalendarRequest, CalendarResult, Heightmap, HorizonProfile, LayerGrid, LayerId, NearbyRequest, NearbyResponse, ScenarioCompareRequest, ScenarioCompareResponse, SimulationRequest, SimulationResult, TerrainPoint } from './types';
+import type { CalendarRequest, CalendarResult, Heightmap, HorizonProfile, LayerGrid, LayerId, NearbyRequest, NearbyResponse, SourcesMeta, ValidationResult, ScenarioCompareRequest, ScenarioCompareResponse, SimulationRequest, SimulationResult, TerrainPoint } from './types';
 import { slopeFromHeights } from '../lib/layers';
 import { DEFAULT_HARDWARE, DEFAULT_WEIGHTS, calculateCase, interpolateHorizon } from '../lib/simModel';
 
@@ -267,3 +267,37 @@ export function mockNearby(req: NearbyRequest): NearbyResponse {
     mock: true,
   };
 }
+
+export function mockValidation(lat: number, lon: number): ValidationResult {
+  const r = rng(seedFrom(lat, lon));
+  const hIll = 40 + r() * 40;
+  const hEarth = 30 + r() * 50;
+  const pIll = hIll + (r() - 0.5) * 6;
+  const pEarth = hEarth + (r() - 0.5) * 6;
+  const delta = Math.max(Math.abs(hIll - pIll), Math.abs(hEarth - pEarth));
+  return {
+    avgIlluminationPct: { horizon: +hIll.toFixed(2), pgda: +pIll.toFixed(2), lrocWac: null },
+    earthVisibilityPct: { horizon: +hEarth.toFixed(2), pgda: +pEarth.toFixed(2) },
+    deltaMaxPts: +delta.toFixed(2),
+    withinTolerance: delta <= 5,
+    tolerancePts: 5,
+    periodStart: '2027-01-01',
+    periodEnd: '2028-01-01',
+    periodDays: 365,
+    samplingStepHours: 1,
+    heightM: 0,
+    lrocWacNote: 'No full-coverage LROC WAC illumination raster available.',
+    horizonDemVersion: 'MOCK',
+    horizonDemResolutionM: 100,
+    pgdaVersion: { illumination: 'MOCK', earthVisibility: 'MOCK' },
+    mock: true,
+  };
+}
+
+export const MOCK_SOURCES: SourcesMeta = {
+  ephemeris: { name: 'JPL Horizons API', version: 'mock', model: 'DE441', url: 'https://ssd.jpl.nasa.gov/api/horizons.api' },
+  terrain: { name: 'LRO LOLA DEM via NASA Moon Trek ImageServer', southPoleNorthPoleResolutionM: 100, globalResolutionPxPerDegree: 256, url: 'https://trek.nasa.gov/moon/' },
+  permanentShadow: { name: 'LOLA Permanently Shadowed Regions map', resolutionM: 20, coverage: '80-90 degrees south', url: 'https://pgda.gsfc.nasa.gov/data/LOLA_20mpp/LPSR_80S_20MPP_ADJ.TIF' },
+  lunarPolarVisibility: { name: 'LOLA Lunar Polar Illumination', source: 'NASA GSFC PGDA', averagingPeriodYears: 18.6, coverage: '65-90 degrees north and south', resolutionM: [60, 120, 240], url: 'https://pgda.gsfc.nasa.gov/products/69' },
+  validationRefs: ['JPL Horizons DE441 with NASA Moon Trek LOLA horizon', 'NASA GSFC PGDA Lunar Polar Illumination'],
+};
