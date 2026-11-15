@@ -13,7 +13,7 @@ HORIZON turns that complexity into answers in seconds.
  
 <!-- Screenshot: save it as docs/simulation.png -->
 <p align="center">
-  <img src="docs/simulation.png" alt="HORIZON simulation: the Sun skimming a polar ridge, with countdowns to sunset and Earthset" width="900">
+  <img src="simulation.png" alt="HORIZON simulation: the Sun skimming a polar ridge, with countdowns to sunset and Earthset" width="900">
 </p>
 
 ## ✨ What it does
