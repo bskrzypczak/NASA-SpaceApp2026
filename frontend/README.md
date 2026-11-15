@@ -136,6 +136,17 @@ Wejścia: zakładka **Scenarios** w top barze, „Scenarios” na ekranie Simula
 - Wynik: kolumny ze szansą, werdyktem, różnicą do baseline, ✓/! przy metrykach z wymagań, „Open simulation” (wynik z backendu po `simulationId`); pasy okien pracy (Sun+Earth / Sun / Earth / dark) z kreską końca misji; **rekomendacja** backendu (reguła: najlepszy spełniający wymagania, przy różnicy < 3 pkt wygrywa bez zmiany daty).
 - Po zmianie listy wyniki są oznaczane jako nieaktualne do ponownego „Compare”. Wyniki cache'owane per zapytanie.
 
+## Lądownik (parametry zasilania)
+
+Bateria, panele i pobory decydują o krzywej baterii i o wyniku, więc są jawne i edytowalne.
+
+- Presety w `src/lib/landers.ts`, każdy z opisem źródeł:
+  - **Reference lander (VIPER-class)** (domyślny): 5,4 kWh, 450 W, 200 W dzień, 80 W noc. Bateria i panele z danych NASA VIPER, pobory założone.
+  - **Small CLPS lander (Nova-C-class)**: 0,7 kWh, 200 W. Lądownik na jeden dzień księżycowy, padnie przy pierwszej długiej nocy.
+  - **Night-survival concept (20 kWh)**: poprzednie wartości domyślne, hipotetyczne.
+- Edycja: **Pro → Lander** (albo klik „⚡ …” w ramce miejsca na scenie). Pola z jednostkami, wyliczone: ile godzin ciemności starczy baterii (z ostrzeżeniem, gdy mniej niż najdłuższa noc), nadwyżka w słońcu, czas doładowania.
+- „Re-run with this lander” przelicza tę misję i zapisuje sprzęt w `useSelection().hardware`. Od tej chwili idzie on też do Dates, Nearby i Scenarios. Mission brief i Pro → Data pokazują nazwę lądownika.
+
 ## Luna — asystentka AI
 
 Przycisk z avatarem Luny otwiera panel z gotowymi pytaniami. Każde pytanie to osobny prompt na backendzie (`POST /luna`, opis w `backend/README.md` §10), a odpowiedź spływa na żywo.

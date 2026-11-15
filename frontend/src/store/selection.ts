@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 import type { LatLon } from '../lib/coords';
+import type { Hardware } from '../api/types';
+import { REFERENCE_LANDER } from '../lib/landers';
 
 export const MISSION_LENGTHS = [3, 7, 14, 30] as const;
 export type TransferType = 'direct' | 'low-energy';
@@ -14,6 +16,9 @@ export interface SelectionState extends LatLon {
   /** id from data/launchSites.ts */
   launchSiteId: string;
   transfer: TransferType;
+  /** Lander power system sent with every simulation, calendar, nearby and scenario request. */
+  hardware: Hardware;
+  setHardware: (hw: Hardware) => void;
   selectSite: (site: LatLon & { name?: string | null }) => void;
   setMission: (m: Partial<Pick<SelectionState, 'landingTime' | 'missionDays' | 'launchSiteId' | 'transfer'>>) => void;
 }
@@ -26,6 +31,8 @@ export const useSelection = create<SelectionState>((set) => ({
   missionDays: 14,
   launchSiteId: 'ksc-39b',
   transfer: 'direct',
+  hardware: { ...REFERENCE_LANDER.hardware },
+  setHardware: (hardware) => set({ hardware }),
   selectSite: ({ lat, lon, name = null }) => set({ lat, lon, name }),
   setMission: (m) => set(m),
 }));

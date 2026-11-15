@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ApiError, apiMode, compareScenarios } from '../api/client';
-import type { DayWindow, ScenarioCompareRequest, ScenarioCompareResponse } from '../api/types';
+import type { Hardware, DayWindow, ScenarioCompareRequest, ScenarioCompareResponse } from '../api/types';
 import { MAX_SCENARIOS, shiftDays, useScenarios, type ScenarioDraft } from '../store/scenarios';
 import { useSelection } from '../store/selection';
 import { SITES } from '../data/sites';
@@ -15,7 +15,7 @@ const WINDOW_DAYS = 30;
 const STEP_MIN = 10;
 const RED = 'var(--danger-text)';
 
-function toSpec(d: ScenarioDraft) {
+function toSpec(d: ScenarioDraft, hardware: Hardware) {
   return {
     label: d.label,
     site: siteRef(d),
@@ -24,6 +24,7 @@ function toSpec(d: ScenarioDraft) {
     windowDays: WINDOW_DAYS,
     stepMin: STEP_MIN,
     horizonModel: defaultHorizonModel(d.lat),
+    hardware,
     includeTimeseries: false as const,
   };
 }
@@ -68,10 +69,10 @@ export function ScenariosPage() {
     const scenarios = items.map((d) => {
       const n = (seen.get(d.label) ?? 0) + 1;
       seen.set(d.label, n);
-      return toSpec(n > 1 ? { ...d, label: `${d.label} (${n})` } : d);
+      return toSpec(n > 1 ? { ...d, label: `${d.label} (${n})` } : d, sel.hardware);
     });
     return { scenarios, requirements };
-  }, [items, requirements]);
+  }, [items, requirements, sel.hardware]);
   const key = JSON.stringify(request);
   const stale = !!result && resultKey !== key;
   const base = items[0];

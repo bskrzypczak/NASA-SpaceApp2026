@@ -3,20 +3,14 @@
  * Used for MOCK mode only — in live mode the backend is the source of truth.
  * Keep the formulas identical to the backend (README §5.3–5.5).
  */
+import { REFERENCE_LANDER } from './landers';
 import type { DayWindow, Hardware, ScoreFactor, ScoreWeights, SimEvent, SimSummary, SimTimeseries, Verdict } from '../api/types';
 
 export const SUN_ANGULAR_RADIUS_DEG = 0.266;
 export const EARTH_ANGULAR_RADIUS_DEG = 0.95;
 
-export const DEFAULT_HARDWARE: Hardware = {
-  batteryWh: 20_000,
-  solarW: 600,
-  dayLoadW: 300,
-  nightLoadW: 140,
-  reservePct: 20,
-  panelHeightM: 2,
-  mastHeightM: 3.5,
-};
+/** HORIZON reference lander (VIPER-class) — same values as the backend defaults. See lib/landers.ts. */
+export const DEFAULT_HARDWARE: Hardware = { ...REFERENCE_LANDER.hardware };
 
 export const DEFAULT_WEIGHTS: ScoreWeights = { power: 0.5, comms: 0.3, night: 0.2 };
 

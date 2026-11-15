@@ -7,6 +7,7 @@ import { useSimulations } from '../store/simulations';
 import { SITES } from '../data/sites';
 import { formatLat, formatLon } from '../lib/coords';
 import { DEFAULT_HARDWARE, DEFAULT_WEIGHTS } from '../lib/simModel';
+import { landerName } from '../lib/landers';
 import './MissionBriefPage.css';
 
 /**
@@ -183,6 +184,8 @@ function Brief({ r }: { r: SimulationResult }) {
         <div>
           <h2>Hardware assumed</h2>
           <dl className="brief__dl">
+            <dt>Lander</dt>
+            <dd>{landerName(hw)}</dd>
             <dt>Battery</dt>
             <dd>
               {(hw.batteryWh / 1000).toFixed(1)} kWh, reserve {hw.reservePct} %

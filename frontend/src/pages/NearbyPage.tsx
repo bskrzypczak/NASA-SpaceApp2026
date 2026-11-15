@@ -61,8 +61,9 @@ export function NearbyPage() {
       goal,
       maxSlopeDeg,
       top: 3,
+      hardware: sel.hardware,
     }),
-    [sel.lat, sel.lon, sel.landingTime, sel.missionDays, radiusKm, goal, maxSlopeDeg],
+    [sel.lat, sel.lon, sel.landingTime, sel.missionDays, radiusKm, goal, maxSlopeDeg, sel.hardware],
   );
   const stale = !!state.req && JSON.stringify(state.req) !== JSON.stringify(req);
 

@@ -2,11 +2,15 @@ import { useState } from 'react';
 import { ApiError, getSources, getValidation } from '../../api/client';
 import type { SimEvent, SimulationResult, ValidationResult } from '../../api/types';
 import { useApi } from '../../hooks/useApi';
+import { landerName } from '../../lib/landers';
 import { DEFAULT_HARDWARE, DEFAULT_WEIGHTS, EARTH_ANGULAR_RADIUS_DEG, SUN_ANGULAR_RADIUS_DEG } from '../../lib/simModel';
 import { TimeChart } from './TimeChart';
+import { LanderEditor } from './LanderEditor';
+import type { Hardware } from '../../api/types';
 import './pro.css';
 
-type Tab = 'charts' | 'events' | 'validation' | 'data';
+export type ProTab = 'charts' | 'events' | 'lander' | 'validation' | 'data';
+type Tab = ProTab;
 
 const SUN = '#EAFE07';
 const EARTH = '#2E96F5';
@@ -27,11 +31,33 @@ const EVENT_LABEL: Record<SimEvent['type'], { icon: string; label: string }> = {
  * Pro mode: the numbers behind the 3D scene — elevation vs terrain mask, battery, every event,
  * an independent check against NASA PGDA, and the raw data to export.
  */
-export function ProPanel({ result, t, onT }: { result: SimulationResult; t: number; onT: (t: number) => void }) {
-  const [tab, setTab] = useState<Tab>('charts');
+export function ProPanel({
+  result,
+  t,
+  onT,
+  tab: tabProp,
+  onTab,
+  onRunLander,
+  landerRunning = false,
+  landerError = null,
+}: {
+  result: SimulationResult;
+  t: number;
+  onT: (t: number) => void;
+  /** Controlled tab (optional) — lets the page open the Lander tab. */
+  tab?: Tab;
+  onTab?: (t: Tab) => void;
+  onRunLander: (hw: Hardware) => void;
+  landerRunning?: boolean;
+  landerError?: Error | null;
+}) {
+  const [ownTab, setOwnTab] = useState<Tab>('charts');
+  const tab = tabProp ?? ownTab;
+  const setTab = onTab ?? setOwnTab;
   const tabs: { id: Tab; label: string }[] = [
     { id: 'charts', label: 'Charts' },
     { id: 'events', label: `Events (${result.events.length})` },
+    { id: 'lander', label: 'Lander' },
     { id: 'validation', label: 'Validation vs PGDA' },
     { id: 'data', label: 'Data & export' },
   ];
@@ -49,6 +75,7 @@ export function ProPanel({ result, t, onT }: { result: SimulationResult; t: numb
       </div>
       {tab === 'charts' && <Charts result={result} t={t} onT={onT} />}
       {tab === 'events' && <Events result={result} t={t} onT={onT} />}
+      {tab === 'lander' && <LanderEditor result={result} onRun={onRunLander} running={landerRunning} error={landerError} />}
       {tab === 'validation' && <Validation result={result} />}
       {tab === 'data' && <DataExport result={result} />}
     </section>
@@ -303,6 +330,7 @@ function DataExport({ result }: { result: SimulationResult }) {
           <dl className="details">
             {(
               [
+                ['Lander', landerName(hw)],
                 ['Battery', `${hw.batteryWh} Wh, reserve ${hw.reservePct} %`],
                 ['Solar panel', `${hw.solarW} W at ${hw.panelHeightM} m`],
                 ['Loads', `${hw.dayLoadW} W day / ${hw.nightLoadW} W night`],

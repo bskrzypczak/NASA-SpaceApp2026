@@ -380,7 +380,7 @@ def test_simulation_post_and_get_return_idempotent_contract(monkeypatch):
         "lon": -137.3,
         "elevationM": 1956.0,
     }
-    assert result["input"]["hardware"]["batteryWh"] == 20000
+    assert result["input"]["hardware"]["batteryWh"] == 5400
     assert result["summary"]["successPct"] == 97
     assert result["timeseries"]["stepMin"] == 720
     assert client.get(f"{API}/simulations/{result['id']}").json() == result

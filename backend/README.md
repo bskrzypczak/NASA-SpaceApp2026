@@ -236,10 +236,10 @@ Request:
   "stepMin": 10,
   "horizonModel": "real",
   "hardware": {
-    "batteryWh": 20000,
-    "solarW": 600,
-    "dayLoadW": 300,
-    "nightLoadW": 140,
+    "batteryWh": 5400,
+    "solarW": 450,
+    "dayLoadW": 200,
+    "nightLoadW": 80,
     "reservePct": 20,
     "panelHeightM": 2.0,
     "mastHeightM": 3.5
@@ -251,7 +251,12 @@ Request:
 
 - `site` to **albo** `{ "siteId": "…" }`, **albo** `{ "lat": -89.45, "lon": -137.3 }`.
 - `horizonModel`: `"real"` (teren LOLA) albo `"flat"` (gładka sfera) — przełącznik „Real terrain ↔ Flat horizon”.
-- `hardware` i `weights` opcjonalne — domyślne wartości jak wyżej (preset „CLPS-class lander”).
+- `hardware` i `weights` opcjonalne — domyślne wartości jak wyżej: **lądownik referencyjny klasy VIPER**.
+  Bateria 5,4 kWh i 450 W paneli to opublikowane dane łazika NASA VIPER (5420 Wh, 450 W szczytowo).
+  Pobory 200 W w dzień i 80 W w nocy to nasze założenia: 80 W daje ~54 h ciemności do rezerwy 20 %,
+  blisko ~50 h przetrwania VIPER-a w trybie niskiego poboru. Frontend wysyła `hardware` zawsze jawnie
+  (presety w `frontend/src/lib/landers.ts`, edycja w Pro → Lander). Wcześniejszy domyślny zestaw
+  (20 kWh / 600 W / 300 W / 140 W) jest dostępny jako preset „Night-survival concept”.
 - `missionDays` nie może przekraczać `windowDays`; oba okna muszą mieścić się w 1–30 dniach.
 - `stepMin` musi dzielić dokładnie oba okna; limit to 4320 próbek. `landingTime` wymaga strefy czasowej i pełnej minuty.
 - Wagi są normalizowane do sumy 1. `includeTimeseries: false` pomija duże tablice przebiegów.
@@ -687,7 +692,9 @@ E     = clamp(E + P_net · Δt_h, 0, batteryWh)
 socPct = E / batteryWh · 100
 ```
 
-Start: `E = batteryWh`.
+Start: `E = batteryWh`. Model zakłada panel zawsze skierowany na Słońce (moc zależy tylko od
+widocznej części tarczy), bez temperatury, sprawności ładowania i degradacji. Pobór nocny
+umownie obejmuje grzałki przetrwania.
 
 ### 5.5 Ocena powodzenia (heurystyka — tak ją nazywamy w UI)
 

@@ -4,6 +4,10 @@ Aktualizacja: 2026-11-15
 
 ## Zrobione
 
+- Domyślny sprzęt symulacji zmieniony na lądownik referencyjny klasy VIPER:
+  5400 Wh, 450 W, 200 W dzień, 80 W noc (poprzednio 20 kWh / 600 / 300 / 140 W).
+  `POST /nearby` przyjmuje opcjonalne `hardware` (wcześniej zawsze domyślne).
+
 - Dodano Lunę — wyjaśnienia AI: `POST /api/v1/luna` (strumień NDJSON) i
   `GET /api/v1/luna/status`. Sześć tematów z osobnymi promptami
   (`site-intro`, `sim-score`, `sim-worst`, `sim-sun`, `scen-why`,

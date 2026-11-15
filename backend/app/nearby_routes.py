@@ -48,6 +48,7 @@ class NearbyRequest(BaseModel):
     goal: Literal["balanced", "power", "comms"] = "balanced"
     maxSlopeDeg: float = Field(default=10, ge=0, le=90)
     top: int = Field(default=3, ge=1, le=3)
+    hardware: SimulationHardware = Field(default_factory=SimulationHardware)
 
 
 def _destination(lat: float, lon: float, east_m: float, north_m: float) -> tuple[float, float]:
@@ -203,7 +204,7 @@ async def find_nearby(request: NearbyRequest) -> dict[str, Any]:
         candidates.append((row, col, lat, lon, distance_km))
 
     weights = _goal_weights(request.goal)
-    hardware = SimulationHardware()
+    hardware = request.hardware
     await prepare_horizon_profiles(
         center_lat,
         center_lon,

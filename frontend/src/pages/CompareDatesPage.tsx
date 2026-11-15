@@ -71,9 +71,9 @@ export function CompareDatesPage() {
   const [selected, setSelected] = useState<string | null>(null);
 
   const base = useMemo(
-    () => ({ site: siteRef(sel), landingTimeOfDay: timeOfDay, missionDays: sel.missionDays, horizonModel }),
+    () => ({ site: siteRef(sel), landingTimeOfDay: timeOfDay, missionDays: sel.missionDays, horizonModel, hardware: sel.hardware }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [sel.name, sel.lat, sel.lon, timeOfDay, sel.missionDays, horizonModel],
+    [sel.name, sel.lat, sel.lon, timeOfDay, sel.missionDays, horizonModel, sel.hardware],
   );
   const next = addMonths(view, 1);
   const monthsReq = useMemo<CalendarRequest>(

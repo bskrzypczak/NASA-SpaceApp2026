@@ -16,10 +16,17 @@ class SimulationSite(_SimulationModel):
 
 
 class SimulationHardware(_SimulationModel):
-    batteryWh: float = Field(default=20_000, gt=0)
-    solarW: float = Field(default=600, ge=0)
-    dayLoadW: float = Field(default=300, ge=0)
-    nightLoadW: float = Field(default=140, ge=0)
+    """Default = HORIZON reference lander (VIPER-class power system).
+
+    Battery 5.4 kWh and 450 W of solar array follow NASA's published VIPER figures
+    (5,420 Wh battery, 450 W peak array). Day/night loads are our assumptions: 80 W at night
+    gives ~54 h of darkness down to the 20 % reserve, close to VIPER's ~50 h low-power survival.
+    """
+
+    batteryWh: float = Field(default=5_400, gt=0)
+    solarW: float = Field(default=450, ge=0)
+    dayLoadW: float = Field(default=200, ge=0)
+    nightLoadW: float = Field(default=80, ge=0)
     reservePct: float = Field(default=20, ge=0, le=100)
     panelHeightM: float = Field(default=2, ge=0)
     mastHeightM: float = Field(default=3.5, ge=0)

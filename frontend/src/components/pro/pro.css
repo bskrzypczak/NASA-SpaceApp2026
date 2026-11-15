@@ -219,3 +219,115 @@
   gap: 8px;
   font-size: 14px;
 }
+
+/* ---------- Lander tab ---------- */
+.lander {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) minmax(0, 1.4fr);
+  gap: 24px;
+  align-items: start;
+}
+
+.lander__presets {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lander__preset {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.lander__preset:hover {
+  border-color: var(--border-strong);
+}
+
+.lander__preset.is-on {
+  border: 2px solid var(--accent);
+  padding: 11px 13px;
+}
+
+.lander__preset-name {
+  font-weight: 700;
+}
+
+.lander__preset-spec {
+  font-size: 12px;
+  color: var(--accent);
+}
+
+.lander__preset-basis {
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+.lander__custom {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 2px solid var(--accent);
+  font-weight: 700;
+}
+
+.lander__form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.lander__fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 12px;
+}
+
+.lander__field {
+  font-size: 13px;
+}
+
+.lander__input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+}
+
+.lander__input input {
+  flex: 1;
+  min-width: 0;
+  min-height: var(--tap);
+  text-align: right;
+}
+
+.lander__derived {
+  gap: 8px;
+}
+
+.lander__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+}
+
+.lander__note {
+  flex: 1 1 260px;
+  font-size: 13px;
+}
+
+@media (max-width: 900px) {
+  .lander {
+    grid-template-columns: 1fr;
+  }
+}

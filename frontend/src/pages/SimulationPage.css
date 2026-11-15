@@ -73,6 +73,7 @@
   background: var(--deep-blue);
   border: 1px solid var(--border);
   pointer-events: none;
+  z-index: 30;
 }
 
 .sim-stage__site strong {
@@ -174,4 +175,21 @@
 .sim-stage__luna .luna-fab--inline {
   background: rgba(7, 23, 63, 0.85);
   backdrop-filter: blur(6px);
+}
+
+.sim-stage__lander {
+  pointer-events: auto; /* the info box itself lets drags through to the 3D view */
+  align-self: flex-start;
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  font: 600 12px var(--font-body);
+  cursor: pointer;
+}
+
+.sim-stage__lander:hover {
+  color: var(--text);
+  text-decoration: underline;
 }

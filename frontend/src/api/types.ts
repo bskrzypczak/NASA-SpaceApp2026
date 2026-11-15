@@ -286,6 +286,7 @@ export interface NearbyRequest {
   goal: NearbyGoal;
   maxSlopeDeg: number;
   top: number;
+  hardware?: Partial<Hardware>;
 }
 
 export interface NearbySuggestion {

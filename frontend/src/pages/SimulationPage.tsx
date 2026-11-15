@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ApiError, apiMode, createSimulation, getHorizon, getSimulation } from '../api/client';
-import type { HorizonModel, SimulationRequest, SimulationResult } from '../api/types';
+import type { Hardware, HorizonModel, SimulationRequest, SimulationResult } from '../api/types';
 import { useSelection, type SelectionState } from '../store/selection';
 import { setLastSimulation, useSimulations } from '../store/simulations';
 import { useApi } from '../hooks/useApi';
@@ -12,7 +12,8 @@ import { SimScene3D, type CameraMode } from '../components/sim/SimScene3D';
 import { SkyView } from '../components/sim/SkyView';
 import { StatusCards, SuccessCard, Timeline } from '../components/sim/SimPanels';
 import { DEFAULT_HARDWARE } from '../lib/simModel';
-import { ProPanel } from '../components/pro/ProPanel';
+import { ProPanel, type ProTab } from '../components/pro/ProPanel';
+import { landerName } from '../lib/landers';
 import { Luna, type LunaQuestion } from '../components/luna/Luna';
 import { defaultHorizonModel, siteRef } from '../lib/requests';
 import './SimulationPage.css';
@@ -30,6 +31,7 @@ function requestFromSelection(sel: SelectionState, horizonModel?: HorizonModel):
     windowDays: WINDOW_DAYS,
     stepMin: STEP_MIN,
     horizonModel: horizonModel ?? defaultHorizonModel(sel.lat),
+    hardware: sel.hardware,
     includeTimeseries: true,
   };
 }
@@ -176,6 +178,24 @@ export function SimulationPage() {
   const missionDays = shown?.input.missionDays ?? 14;
   const reservePct = shown?.input.hardware?.reservePct ?? DEFAULT_HARDWARE.reservePct;
 
+  // Pro → Lander: re-run this mission with another power system.
+  const setHardware = useSelection((s) => s.setHardware);
+  const [proTab, setProTab] = useState<ProTab>('charts');
+  const [landerRun, setLanderRun] = useState<{ running: boolean; error: Error | null }>({ running: false, error: null });
+  const runLander = (hw: Hardware) => {
+    if (!shown) return;
+    setHardware(hw);
+    setLanderRun({ running: true, error: null });
+    runOnce({ ...requestWithSeries(shown), hardware: hw })
+      .then((res) => {
+        put(res);
+        setLastSimulation(res.id);
+        setLanderRun({ running: false, error: null });
+        if (res.id !== shown.id) navigate(`/simulation/${encodeURIComponent(res.id)}${window.location.search}`);
+      })
+      .catch((e: Error) => setLanderRun({ running: false, error: e }));
+  };
+
   const horizon = useApi(
     (signal) => (base && baseIsReal ? getHorizon(base.site.lat, base.site.lon, base.input.hardware?.panelHeightM ?? 2, signal) : Promise.resolve(null)),
     [base?.id],
@@ -308,6 +328,18 @@ export function SimulationPage() {
           <span className="mono" style={{ color: 'var(--accent)' }}>
             {formatLat(shown.site.lat, 3)} · {formatLon(shown.site.lon, 3)}
           </span>
+          <button
+            type="button"
+            className="sim-stage__lander"
+            title="Lander power system — change it in Pro → Lander"
+            onClick={() => {
+              setPro(true);
+              setProTab('lander');
+              setTimeout(() => document.querySelector('.pro')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+            }}
+          >
+            ⚡ {landerName(shown.input.hardware, true)} <span aria-hidden="true">›</span>
+          </button>
         </div>
       </div>
 
@@ -340,6 +372,11 @@ export function SimulationPage() {
       {pro && (
         <ProPanel
           result={shown}
+          tab={proTab}
+          onTab={setProTab}
+          onRunLander={runLander}
+          landerRunning={landerRun.running}
+          landerError={landerRun.error}
           t={t}
           onT={(v) => {
             setPlaying(false);
